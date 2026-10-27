@@ -1,0 +1,48 @@
+[
+  {
+    "id": "VN-EVAL-001",
+    "domain": "Pháp luật",
+    "input_text": "Tại Việt Nam, Luật Bảo vệ dữ liệu cá nhân số 91/2025/QH15 có hiệu lực từ ngày 01/01/2026.",
+    "expected_claim_count": 1,
+    "expected_verdict": "SUPPORTED",
+    "is_actually_true_or_unverified": true,
+    "notes": "Mệnh đề pháp luật có văn bản chính thức Cấp 1."
+  },
+  {
+    "id": "VN-EVAL-002",
+    "domain": "Kinh tế",
+    "input_text": "Giá điện đã tăng 50% chỉ trong một tháng.",
+    "expected_claim_count": 1,
+    "expected_verdict": "INSUFFICIENT_EVIDENCE",
+    "is_actually_true_or_unverified": true,
+    "notes": "Thiếu quốc gia, mốc thời gian và biểu giá điện cụ thể."
+  },
+  {
+    "id": "VN-EVAL-003",
+    "domain": "Giáo dục",
+    "input_text": "Mọi sinh viên đều sử dụng trí tuệ nhân tạo trong học tập.",
+    "expected_claim_count": 1,
+    "expected_verdict": "MISLEADING",
+    "is_actually_true_or_unverified": true,
+    "notes": "Khái quát hóa tuyệt đối ('Mọi sinh viên đều') không có khảo sát tổng thể đại diện."
+  },
+  {
+    "id": "VN-EVAL-004",
+    "domain": "Đời sống - Xã hội",
+    "input_text": "Theo tôi nghĩ, làm việc từ xa luôn mang lại cảm hứng sáng tạo tuyệt vời nhất cho mọi nhân viên.",
+    "expected_claim_count": 1,
+    "expected_verdict": "NOT_VERIFIABLE",
+    "is_actually_true_or_unverified": true,
+    "notes": "Quan điểm cá nhân chủ quan - tuyệt đối không được gán nhãn REFUTED (tin giả)."
+  },
+  {
+    "id": "VN-EVAL-005",
+    "domain": "Kinh tế",
+    "input_text": "Trong năm 2025, doanh nghiệp X tăng trưởng doanh thu 35%, mở rộng sang 5 quốc gia và trở thành doanh nghiệp lớn nhất khu vực.",
+    "expected_claim_count": 3,
+    "expected_verdict": "INSUFFICIENT_EVIDENCE",
+    "is_actually_true_or_unverified": true,
+    "notes": "Kiểm tra khả năng tách 3 mệnh đề độc lập từ 1 câu ghép."
+  }
+]
+

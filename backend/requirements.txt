@@ -1,0 +1,28 @@
+fastapi>=0.115.0,<1.0.0
+uvicorn>=0.32.0,<1.0.0
+pydantic>=2.9.0,<3.0.0
+pydantic-settings>=2.6.0,<3.0.0
+python-multipart>=0.0.12
+
+# Google Gemini Unified SDK
+google-genai>=1.5.0
+
+# HTTP & Web Extraction
+httpx>=0.27.2
+beautifulsoup4>=4.12.3
+lxml>=5.3.0
+
+# Document Parsing & Annotated PDF Generation
+PyMuPDF>=1.24.13
+python-docx>=1.1.2
+
+# Database + pgvector + Async Drivers
+sqlalchemy[asyncio]>=2.0.36
+asyncpg>=0.30.0
+aiosqlite>=0.20.0
+pgvector>=0.3.6
+
+# Cache & Background Jobs
+redis>=5.2.0
+celery>=5.4.0
+

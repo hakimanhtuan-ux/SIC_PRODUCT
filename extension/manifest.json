@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "TrueCheck AI – Kiểm chứng thông tin dựa trên bằng chứng",
+  "version": "0.1.0",
+  "description": "Bôi đen đoạn văn bản đáng ngờ trên trang báo hoặc mạng xã hội để kiểm chứng tức thì kèm dẫn chứng nguồn gốc cùng TrueCheck AI.",
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "TrueCheck AI – Highlight to Verify",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
+

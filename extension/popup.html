@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>TrueCheck AI</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="header">
+    <div>
+      <div class="brand">🛡️ TRUECHECK AI</div>
+      <div class="subtitle">Kiểm chứng tại điểm chạm</div>
+    </div>
+    <button id="open-studio-btn" class="studio-link" type="button">Mở Studio ↗</button>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <label class="label" for="quick-text">Kiểm chứng nhanh mệnh đề</label>
+      <textarea
+        id="quick-text"
+        rows="3"
+        placeholder="Dán đoạn văn bản đáng ngờ để kiểm chứng ngay..."
+      ></textarea>
+      <button id="verify-btn" class="primary-btn" type="button">
+        🔍 Kiểm chứng với TrueCheck AI
+      </button>
+      <div id="quick-result" class="result-box hidden"></div>
+    </section>
+
+    <section class="card">
+      <div class="row-between">
+        <label class="checkbox-label">
+          <input type="checkbox" id="save-history-toggle" />
+          <span>Lưu lịch sử kiểm chứng (Tùy chọn)</span>
+        </label>
+        <button id="clear-history-btn" class="text-btn" type="button">Xóa</button>
+      </div>
+      <div id="history-list" class="history-list"></div>
+    </section>
+
+    <details class="settings-box">
+      <summary>Cấu hình kết nối máy chủ</summary>
+      <div class="settings-fields">
+        <label class="label" for="api-url">API Backend URL</label>
+        <input id="api-url" type="url" value="http://localhost:8000" />
+        <label class="label" for="web-url">Web App Studio URL</label>
+        <input id="web-url" type="url" value="http://localhost:3000" />
+        <button id="save-settings-btn" class="secondary-btn" type="button">
+          Lưu cấu hình
+        </button>
+      </div>
+    </details>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>
+
