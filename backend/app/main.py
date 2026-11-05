@@ -32,7 +32,11 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
-    allow_origin_regex=r"^chrome-extension://.*|^https?://(localhost|127\.0\.0\.1|\[::1\]|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$",
+    allow_origin_regex=(
+        r"^chrome-extension://.*|"
+        r"^https?://(localhost|127\.0\.0\.1|\[::1\]|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$|"
+        r"^https://.*\.(github\.io|vercel\.app|onrender\.com|railway\.app|netlify\.app|hf\.space)$"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

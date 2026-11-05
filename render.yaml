@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: factcheck-assistent-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ALLOW_SQLITE_FALLBACK
+        value: "true"
+      - key: ENABLE_DEMO_FALLBACK
+        value: "true"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: GOOGLE_FACTCHECK_API_KEY
+        sync: false
+
+  - type: web
+    name: factcheck-assistent-web
+    runtime: node
+    rootDir: web
+    buildCommand: npm install && npm run build
+    startCommand: npm run start -- -p $PORT
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: factcheck-assistent-backend
+          envVarKey: RENDER_EXTERNAL_URL
+

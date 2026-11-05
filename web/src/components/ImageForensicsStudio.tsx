@@ -1082,13 +1082,13 @@ export function ImageForensicsStudio({
                       <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3.5 space-y-1.5">
                         <div className="flex items-center gap-1.5 text-xs font-extrabold text-emerald-900">
                           <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                          <span>Thông tin đính chính chính xác:</span>
+                          <span>Đề xuất diễn đạt chuẩn xác / Đính chính:</span>
                         </div>
                         <p className="text-xs font-bold text-emerald-950">
-                          {claim.suggested_correction.corrected_claim}
+                          {claim.suggested_correction.cautious_rewrite}
                         </p>
                         <p className="text-xs font-medium text-emerald-800">
-                          {claim.suggested_correction.explanation}
+                          {claim.suggested_correction.rationale}
                         </p>
                       </div>
                     )}

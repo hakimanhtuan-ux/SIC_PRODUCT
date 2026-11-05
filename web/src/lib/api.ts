@@ -9,20 +9,33 @@ const EXPLICIT_API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || 
 
 /**
  * Smart multi-path fetch:
- * 1. Uses same-origin `/api/v1/...` via Next.js rewrite proxy first (eliminates CORS & IPv6/IPv4 localhost issues).
- * 2. Automatically falls back to `http://127.0.0.1:8000` and `http://localhost:8000` if needed.
+ * 1. Uses explicit NEXT_PUBLIC_API_URL if configured.
+ * 2. Uses same-origin `/api/v1/...` via Next.js rewrite proxy (when running on Next.js server/Vercel).
+ * 3. Automatically falls back to `http://127.0.0.1:8000` and `http://localhost:8000`.
  */
 async function apiFetch(endpoint: string, init?: RequestInit): Promise<Response> {
+  const isStaticGithubPages =
+    typeof window !== "undefined" &&
+    window.location.hostname.endsWith("github.io");
+
   const candidates = EXPLICIT_API_URL
-    ? [EXPLICIT_API_URL, "", "http://127.0.0.1:8000"]
-    : ["", "http://127.0.0.1:8000", "http://localhost:8000"];
+    ? [EXPLICIT_API_URL, "http://127.0.0.1:8000", "http://localhost:8000"]
+    : isStaticGithubPages
+      ? ["http://127.0.0.1:8000", "http://localhost:8000"]
+      : ["", "http://127.0.0.1:8000", "http://localhost:8000"];
 
   let lastErr: unknown = null;
   for (const base of candidates) {
     try {
       const res = await fetch(`${base}${endpoint}`, init);
-      // If Next.js proxy returned 502/504 because it couldn't reach upstream, try direct fallback
-      if ((res.status === 502 || res.status === 504) && base === "") {
+      // If Next.js proxy or static host returned 404/405/502/504 on relative path, try next candidate
+      if (
+        (res.status === 404 ||
+          res.status === 405 ||
+          res.status === 502 ||
+          res.status === 504) &&
+        base === ""
+      ) {
         continue;
       }
       return res;
