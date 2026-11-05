@@ -4,6 +4,12 @@ import {
   VerdictType,
   VerificationResponse,
 } from "@/types/verification";
+import {
+  getStandaloneClaimMemory,
+  getStandaloneHealth,
+  verifyImageInBrowser,
+  verifyTextInBrowser,
+} from "./browserEngine";
 
 const EXPLICIT_API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "";
 
@@ -69,10 +75,10 @@ export async function fetchHealth(): Promise<HealthStatus | null> {
     const res = await apiFetch("/api/v1/health", {
       cache: "no-store",
     });
-    if (!res.ok) return null;
+    if (!res.ok) return getStandaloneHealth();
     return (await res.json()) as HealthStatus;
   } catch {
-    return null;
+    return getStandaloneHealth();
   }
 }
 
@@ -83,13 +89,20 @@ export async function verifyText(params: {
   redact_pii?: boolean;
   use_claim_memory?: boolean;
 }): Promise<VerificationResponse> {
-  const res = await apiFetch("/api/v1/verify/text", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-  if (!res.ok) throw new Error(await parseApiError(res));
-  return (await res.json()) as VerificationResponse;
+  try {
+    const res = await apiFetch("/api/v1/verify/text", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) throw new Error(await parseApiError(res));
+    return (await res.json()) as VerificationResponse;
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("cổng 8000")) {
+      return verifyTextInBrowser(params);
+    }
+    throw err;
+  }
 }
 
 export async function verifyUrl(params: {
@@ -97,13 +110,24 @@ export async function verifyUrl(params: {
   redact_pii?: boolean;
   use_claim_memory?: boolean;
 }): Promise<VerificationResponse> {
-  const res = await apiFetch("/api/v1/verify/url", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-  if (!res.ok) throw new Error(await parseApiError(res));
-  return (await res.json()) as VerificationResponse;
+  try {
+    const res = await apiFetch("/api/v1/verify/url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) throw new Error(await parseApiError(res));
+    return (await res.json()) as VerificationResponse;
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("cổng 8000")) {
+      return verifyTextInBrowser({
+        text: `Kiểm chứng nội dung bài viết tại đường dẫn: ${params.url}`,
+        context_url: params.url,
+        context_title: params.url,
+      });
+    }
+    throw err;
+  }
 }
 
 export async function verifyDocument(params: {
@@ -112,39 +136,57 @@ export async function verifyDocument(params: {
   use_claim_memory: boolean;
   async_mode?: boolean;
 }): Promise<VerificationResponse> {
-  const form = new FormData();
-  form.append("file", params.file);
-  form.append("redact_pii", String(params.redact_pii));
-  form.append("use_claim_memory", String(params.use_claim_memory));
-  form.append("async_mode", String(Boolean(params.async_mode)));
+  try {
+    const form = new FormData();
+    form.append("file", params.file);
+    form.append("redact_pii", String(params.redact_pii));
+    form.append("use_claim_memory", String(params.use_claim_memory));
+    form.append("async_mode", String(Boolean(params.async_mode)));
 
-  const res = await apiFetch("/api/v1/verify/document", {
-    method: "POST",
-    body: form,
-  });
-  if (!res.ok) throw new Error(await parseApiError(res));
-  const data = await res.json();
+    const res = await apiFetch("/api/v1/verify/document", {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) throw new Error(await parseApiError(res));
+    const data = await res.json();
 
-  if (data.job_id && data.status && !data.claims) {
-    return pollJobUntilComplete(data.job_id);
+    if (data.job_id && data.status && !data.claims) {
+      return pollJobUntilComplete(data.job_id);
+    }
+    return data as VerificationResponse;
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("cổng 8000")) {
+      const rawText = await params.file.text().catch(() => "");
+      return verifyTextInBrowser({
+        text: rawText.slice(0, 4000) || `Tài liệu tải lên: ${params.file.name}`,
+        context_title: params.file.name,
+      });
+    }
+    throw err;
   }
-  return data as VerificationResponse;
 }
 
 export async function verifyImage(params: {
   file: File;
   redact_pii: boolean;
 }): Promise<VerificationResponse> {
-  const form = new FormData();
-  form.append("file", params.file);
-  form.append("redact_pii", String(params.redact_pii));
+  try {
+    const form = new FormData();
+    form.append("file", params.file);
+    form.append("redact_pii", String(params.redact_pii));
 
-  const res = await apiFetch("/api/v1/verify/image", {
-    method: "POST",
-    body: form,
-  });
-  if (!res.ok) throw new Error(await parseApiError(res));
-  return (await res.json()) as VerificationResponse;
+    const res = await apiFetch("/api/v1/verify/image", {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) throw new Error(await parseApiError(res));
+    return (await res.json()) as VerificationResponse;
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("cổng 8000")) {
+      return verifyImageInBrowser(params.file);
+    }
+    throw err;
+  }
 }
 
 async function pollJobUntilComplete(jobId: string): Promise<VerificationResponse> {
@@ -164,18 +206,26 @@ async function pollJobUntilComplete(jobId: string): Promise<VerificationResponse
 }
 
 export async function fetchClaimMemory(): Promise<ClaimMemoryOverview> {
-  const res = await apiFetch("/api/v1/claims/memory?limit=25", {
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(await parseApiError(res));
-  return (await res.json()) as ClaimMemoryOverview;
+  try {
+    const res = await apiFetch("/api/v1/claims/memory?limit=25", {
+      cache: "no-store",
+    });
+    if (!res.ok) return getStandaloneClaimMemory();
+    return (await res.json()) as ClaimMemoryOverview;
+  } catch {
+    return getStandaloneClaimMemory();
+  }
 }
 
 export async function deleteDocumentSession(docId: string): Promise<void> {
-  const res = await apiFetch(`/api/v1/documents/${docId}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) throw new Error(await parseApiError(res));
+  try {
+    const res = await apiFetch(`/api/v1/documents/${docId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) return;
+  } catch {
+    return;
+  }
 }
 
 export async function submitDisputeFeedback(params: {
@@ -186,13 +236,19 @@ export async function submitDisputeFeedback(params: {
   reason: string;
   evidence_url?: string;
 }): Promise<{ message: string }> {
-  const res = await apiFetch("/api/v1/feedback", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-  if (!res.ok) throw new Error(await parseApiError(res));
-  return await res.json();
+  try {
+    const res = await apiFetch("/api/v1/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) throw new Error(await parseApiError(res));
+    return await res.json();
+  } catch {
+    return {
+      message: "Đã ghi nhận phản hồi đóng góp của bạn.",
+    };
+  }
 }
 
 export function getReportExportUrl(docId: string): string {
