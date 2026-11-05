@@ -111,11 +111,16 @@ const VERDICT_LABELS_VI: Record<VerdictType, string> = {
 export function getStandaloneHealth(): HealthStatus {
   return {
     status: "ok",
-    version: "1.0.0-cloud",
-    engine_mode: "LIVE_AI",
-    gemini_configured: true,
-    search_configured: true,
-    database_mode: "CLOUD_WEB_ENGINE",
+    database: "CLOUD_WEB_ENGINE",
+    redis_connected: false,
+    engine_ready_mode: "LIVE_AI",
+    providers: {
+      gemini_configured: true,
+      gemini_model: "gemini-3.5-flash-lite",
+      google_factcheck_configured: true,
+      tavily_configured: true,
+      google_cse_configured: false,
+    },
   };
 }
 
@@ -348,12 +353,12 @@ export async function verifyTextInBrowser(params: {
       suggested_correction:
         verdict === "REFUTED" || verdict === "MISLEADING"
           ? {
-              original_span: cText,
-              cautious_rewrite: `Theo dữ liệu cần kiểm chứng thêm từ cơ quan chức năng: "${cText}" (cần nêu rõ nguồn công bố và mốc thời gian cụ thể).`,
-              rationale:
-                "Tránh dùng con số phóng đại hoặc nhận định tuyệt đối khi chưa đính kèm trích dẫn gốc.",
-              distinction_note: "Giúp câu viết khách quan, chuẩn mực báo chí và khoa học.",
-            }
+            original_span: cText,
+            cautious_rewrite: `Theo dữ liệu cần kiểm chứng thêm từ cơ quan chức năng: "${cText}" (cần nêu rõ nguồn công bố và mốc thời gian cụ thể).`,
+            rationale:
+              "Tránh dùng con số phóng đại hoặc nhận định tuyệt đối khi chưa đính kèm trích dẫn gốc.",
+            distinction_note: "Giúp câu viết khách quan, chuẩn mực báo chí và khoa học.",
+          }
           : null,
       from_claim_memory: false,
       memory_version: 1,
@@ -742,12 +747,11 @@ export async function verifyImageInBrowser(file: File): Promise<VerificationResp
 
 export function getStandaloneClaimMemory(): ClaimMemoryOverview {
   return {
-    total_cached_claims: 2,
+    items: [],
     topic_trends: [
       { topic: "Kinh tế - Năng lượng", total_queries: 14 },
       { topic: "Đa phương tiện & Deepfake", total_queries: 19 },
     ],
-    recent_claims: [],
   };
 }
 
