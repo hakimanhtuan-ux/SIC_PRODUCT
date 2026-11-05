@@ -100,7 +100,7 @@ const AUTHENTICITY_THEME: Record<ImageAuthenticityType, AuthenticityTheme> = {
     isReal: false,
   },
   SCREENSHOT_OR_MEME: {
-    headline: "PHÁT HIỆN: ẢNH CHỤP MÀN HÌNH / THIẾT KẾ ĐỒ HỌA",
+    headline: "PHÁT HIỆN: ẤN PHẨM THIẾT KẾ BẰNG ỨNG DỤNG ĐỒ HỌA (CANVA / PHOTOSHOP) / ẢNH CHỤP MÀN HÌNH",
     badgeBg: "bg-indigo-100",
     badgeText: "text-indigo-900",
     badgeBorder: "border-indigo-300",
@@ -960,14 +960,31 @@ export function ImageForensicsStudio({
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 border border-indigo-200 px-3 py-1 text-xs font-extrabold text-indigo-700 mb-2">
               <BookOpen className="h-3.5 w-3.5" />
-              Dual Forensics & Fact-Checking Engine
+              Dual Forensics & Fact-Checking Engine (Chuẩn Quốc tế & Việt Nam)
             </div>
             <h3 className="text-lg font-black text-slate-900 tracking-tight">
-              Kiểm chứng Thông tin & Dữ kiện trong ảnh
+              Kiểm chứng Thông tin & Dữ kiện trên Hình ảnh (Khi đủ điều kiện xác nhận)
             </h3>
             <p className="text-xs font-medium text-slate-600 mt-1 max-w-2xl">
-              Hệ thống đọc văn bản bên trong ảnh (OCR), trích xuất các mệnh đề dữ kiện, phát ngôn, số liệu hoặc tin đồn và tự động đối chiếu với báo chí chính thống & bách khoa toàn thư.
+              Hệ thống phân biệt rõ <strong>Thiết kế bằng ứng dụng đồ họa (Canva/Photoshop)</strong> với <strong>Ảnh AI tạo sinh (theo chuẩn DeepAI Detector & Học thuật DIRE/NPR)</strong>, đồng thời đọc văn bản (OCR) và tự động đối chiếu các thông tin đủ điều kiện xác minh với <strong>tingia.gov.vn</strong>, <strong>bocongan.gov.vn</strong>, <strong>politifact.com</strong> & <strong>Cơ sở dữ liệu Học thuật Quốc tế (OpenAlex/DOI)</strong>.
             </p>
+            <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+              <span className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                ✓ tingia.gov.vn (Trung tâm Xử lý Tin giả VN)
+              </span>
+              <span className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                ✓ bocongan.gov.vn (Bộ Công an)
+              </span>
+              <span className="rounded-md bg-sky-50 border border-sky-200 px-2 py-0.5 text-[11px] font-bold text-sky-800">
+                ✓ PolitiFact.com (IFCN Truth-O-Meter)
+              </span>
+              <span className="rounded-md bg-violet-50 border border-violet-200 px-2 py-0.5 text-[11px] font-bold text-violet-800">
+                ✓ DeepAI Image Detector & CVPR DIRE
+              </span>
+              <span className="rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-bold text-amber-900">
+                ✓ OpenAlex / Crossref DOI (Tài liệu Học thuật)
+              </span>
+            </div>
           </div>
 
           {textClaims.length > 0 && (

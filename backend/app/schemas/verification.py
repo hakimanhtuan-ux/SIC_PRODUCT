@@ -178,7 +178,7 @@ IMAGE_AUTHENTICITY_LABELS_VI: Dict[ImageAuthenticityEnum, str] = {
     ImageAuthenticityEnum.EDITED_OR_SPLICED: "Không nguyên bản — Ảnh đã qua cắt ghép / chỉnh sửa chi tiết",
     ImageAuthenticityEnum.FACE_SWAP_OR_DEEPFAKE: "Cảnh báo Giả mạo — Ảnh thay / ghép khuôn mặt bằng AI (Deepfake)",
     ImageAuthenticityEnum.AI_GENERATED: "Không phải ảnh thật — Ảnh / Ấn phẩm do AI tạo sinh (GenAI)",
-    ImageAuthenticityEnum.SCREENSHOT_OR_MEME: "Ảnh chụp màn hình / Thiết kế đồ họa (Không phải ảnh chụp gốc)",
+    ImageAuthenticityEnum.SCREENSHOT_OR_MEME: "Ấn phẩm Thiết kế Đồ họa bằng Ứng dụng (Canva / Photoshop) hoặc Ảnh chụp màn hình",
     ImageAuthenticityEnum.INCONCLUSIVE_LOW_QUALITY: "Ảnh mờ vỡ / Nén nhiều lần — Chưa đủ chi tiết kết luận",
 }
 

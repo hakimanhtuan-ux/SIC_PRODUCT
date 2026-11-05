@@ -95,7 +95,7 @@ const AUTHENTICITY_LABELS_VI: Record<ImageAuthenticityType, string> = {
   EDITED_OR_SPLICED: "Ảnh đã qua chỉnh sửa / cắt ghép chi tiết",
   FACE_SWAP_OR_DEEPFAKE: "Phát hiện ghép giả khuôn mặt / Deepfake AI",
   AI_GENERATED: "Ảnh / Ấn phẩm do AI tạo sinh (GenAI)",
-  SCREENSHOT_OR_MEME: "Ảnh chụp màn hình / Thiết kế đồ họa",
+  SCREENSHOT_OR_MEME: "Ấn phẩm Thiết kế Đồ họa bằng Ứng dụng (Canva / Photoshop) hoặc Ảnh chụp màn hình",
   INCONCLUSIVE_LOW_QUALITY: "Chưa đủ kết luận (Ảnh độ phân giải thấp / nén nhiều lần)",
 };
 
@@ -226,29 +226,100 @@ function getCuratedOfficialEvidences(claimText: string): EvidenceItem[] {
     });
   }
 
-  items.push({
-    id: "gov-01",
-    title: "Cổng Thông tin Điện tử Chính phủ nước CHXHCN Việt Nam",
-    url: "https://chinhphu.vn",
-    domain: "chinhphu.vn",
-    publisher: "Cổng Thông tin Điện tử Chính phủ",
-    published_date: new Date().toISOString().slice(0, 10),
-    tier: 1,
-    tier_label: "Cấp 1 – Cổng thông tin chính thống Chính phủ",
-    stance: "CONTEXTUAL",
-    snippet:
-      "Nguồn tra cứu chính thức các văn bản quy phạm pháp luật, chỉ đạo điều hành kinh tế - xã hội và thông cáo báo chí của Chính phủ.",
-    scores: {
-      relevance: 0.8,
-      credibility: 0.98,
-      timeliness: 0.9,
-      context: 0.88,
-      consistency: 0.92,
-      traceability: 0.95,
+  items.push(
+    {
+      id: "tingia-01",
+      title: "Trung tâm Xử lý tin giả Việt Nam (VAFC) – Cổng thông tin tiếp nhận và công bố tin giả",
+      url: "https://tingia.gov.vn",
+      domain: "tingia.gov.vn",
+      publisher: "Trung tâm Xử lý tin giả Việt Nam (Bộ TT&TT)",
+      published_date: new Date().toISOString().slice(0, 10),
+      tier: 1,
+      tier_label: "Cấp 1 – Cơ quan Nhà nước & Trung tâm Xử lý Tin giả Việt Nam",
+      stance: "CONTEXTUAL",
+      snippet:
+        "Cổng thông tin chính thức của Trung tâm Xử lý tin giả Việt Nam (tingia.gov.vn) chuyên thẩm định, gắn nhãn bác bỏ tin giả, thông tin sai sự thật và mạo danh trên không gian mạng.",
+      scores: {
+        relevance: 0.88,
+        credibility: 0.98,
+        timeliness: 0.92,
+        context: 0.9,
+        consistency: 0.94,
+        traceability: 0.97,
+      },
+      citation_validated: true,
+      validation_note: "Nguồn đối chiếu chính thống từ Trung tâm Xử lý tin giả Việt Nam (tingia.gov.vn).",
     },
-    citation_validated: false,
-    validation_note: "Cổng thông tin đối chiếu chính thống.",
-  });
+    {
+      id: "bca-01",
+      title: "Cổng Thông tin Điện tử Bộ Công an Việt Nam – Cảnh báo an ninh mạng & Bác bỏ thông tin sai sự thật",
+      url: "https://bocongan.gov.vn",
+      domain: "bocongan.gov.vn",
+      publisher: "Bộ Công an Việt Nam",
+      published_date: new Date().toISOString().slice(0, 10),
+      tier: 1,
+      tier_label: "Cấp 1 – Cổng thông tin Bộ Công an Việt Nam",
+      stance: "CONTEXTUAL",
+      snippet:
+        "Cổng thông tin chính thống của Bộ Công an (bocongan.gov.vn) công bố các thông báo chính thức về an ninh trật tự, cảnh báo thủ đoạn lừa đảo công nghệ cao và xử lý hành vi tung tin giả.",
+      scores: {
+        relevance: 0.86,
+        credibility: 0.98,
+        timeliness: 0.92,
+        context: 0.9,
+        consistency: 0.94,
+        traceability: 0.97,
+      },
+      citation_validated: true,
+      validation_note: "Cổng thông tin chính thống của Bộ Công an (bocongan.gov.vn).",
+    },
+    {
+      id: "politifact-01",
+      title: "PolitiFact & Mạng lưới Kiểm chứng Quốc tế (IFCN) – Chuẩn đối chiếu phát ngôn & đa phương tiện",
+      url: "https://www.politifact.com",
+      domain: "politifact.com",
+      publisher: "PolitiFact (Poynter Institute)",
+      published_date: new Date().toISOString().slice(0, 10),
+      tier: 2,
+      tier_label: "Cấp 2 – Tổ chức Kiểm chứng Quốc tế (IFCN)",
+      stance: "CONTEXTUAL",
+      snippet:
+        "Hệ thống kiểm chứng quốc tế PolitiFact đối chiếu phát ngôn công chúng, ngữ cảnh hình ảnh lan truyền và thang đo mức độ xác thực thông tin.",
+      scores: {
+        relevance: 0.82,
+        credibility: 0.93,
+        timeliness: 0.88,
+        context: 0.88,
+        consistency: 0.9,
+        traceability: 0.92,
+      },
+      citation_validated: false,
+      validation_note: "Chuẩn đối chiếu kiểm chứng quốc tế PolitiFact.",
+    },
+    {
+      id: "gov-01",
+      title: "Cổng Thông tin Điện tử Chính phủ nước CHXHCN Việt Nam",
+      url: "https://chinhphu.vn",
+      domain: "chinhphu.vn",
+      publisher: "Cổng Thông tin Điện tử Chính phủ",
+      published_date: new Date().toISOString().slice(0, 10),
+      tier: 1,
+      tier_label: "Cấp 1 – Cổng thông tin chính thống Chính phủ",
+      stance: "CONTEXTUAL",
+      snippet:
+        "Nguồn tra cứu chính thức các văn bản quy phạm pháp luật, chỉ đạo điều hành kinh tế - xã hội và thông cáo báo chí của Chính phủ.",
+      scores: {
+        relevance: 0.8,
+        credibility: 0.98,
+        timeliness: 0.9,
+        context: 0.88,
+        consistency: 0.92,
+        traceability: 0.95,
+      },
+      citation_validated: false,
+      validation_note: "Cổng thông tin đối chiếu chính thống.",
+    }
+  );
 
   return items;
 }

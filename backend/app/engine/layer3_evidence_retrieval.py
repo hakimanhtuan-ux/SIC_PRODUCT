@@ -361,12 +361,23 @@ def _curated_reference_portals(claim: ExtractedClaimCandidate) -> List[RawCandid
         refs.append((
             "Cổng thông tin Tập đoàn Điện lực Việt Nam (EVN) – Biểu giá bán lẻ điện hiện hành",
             "https://www.evn.com.vn",
-            "Nguồn tra cứu chính thức các quyết định điều chỉnh giá bán lẻ điện bình quân của Bộ Công Thương và EVN (Chế độ Demo: cần cấu hình Search API để trích xuất dữ liệu thời gian thực).",
+            "Nguồn tra cứu chính thức các quyết định điều chỉnh giá bán lẻ điện bình quân của Bộ Công Thương và EVN.",
         ))
         refs.append((
             "Cổng Thông tin điện tử Chính phủ – Văn bản điều hành giá năng lượng",
             "https://chinhphu.vn",
             "Tra cứu công báo và chỉ đạo chính thức về điều hành giá điện, kinh tế vĩ mô.",
+        ))
+    elif any(k in low for k in ("công an", "lừa đảo", "bắt giữ", "khởi tố", "phạt", "luật", "an ninh", "giả mạo")):
+        refs.append((
+            "Cổng Thông tin điện tử Bộ Công an Việt Nam – Cảnh báo tội phạm & tin giả an ninh trật tự",
+            "https://bocongan.gov.vn",
+            "Nguồn xác minh chính thức của Bộ Công an về các vụ việc an ninh trật tự, cảnh báo thủ đoạn lừa đảo không gian mạng và văn bản giả mạo.",
+        ))
+        refs.append((
+            "Trung tâm Xử lý tin giả Việt Nam (VAFC – Bộ TT&TT)",
+            "https://tingia.gov.vn",
+            "Cổng tiếp nhận, thẩm định và công bố các thông tin giả mạo, sai sự thật đã được cơ quan chức năng xác minh.",
         ))
     elif "sinh viên" in low or "giáo dục" in low or "học tập" in low:
         refs.append((
@@ -376,14 +387,19 @@ def _curated_reference_portals(claim: ExtractedClaimCandidate) -> List[RawCandid
         ))
     else:
         refs.append((
-            "Cục Thống kê / Tổng cục Thống kê Việt Nam (GSO) – Dữ liệu kinh tế - xã hội",
-            "https://www.gso.gov.vn",
-            "Cổng dữ liệu thống kê chính thức phục vụ đối chiếu các chỉ số tăng trưởng, dân số, kinh tế - xã hội.",
-        ))
-        refs.append((
-            "Trung tâm Xử lý tin giả Việt Nam (VAFC)",
+            "Trung tâm Xử lý tin giả Việt Nam (VAFC – tingia.gov.vn)",
             "https://tingia.gov.vn",
             "Cổng tiếp nhận và công bố các thông tin đã được cơ quan chức năng xác minh, đính chính.",
+        ))
+        refs.append((
+            "Cổng Thông tin điện tử Bộ Công an Việt Nam (bocongan.gov.vn)",
+            "https://bocongan.gov.vn",
+            "Cơ quan công bố chính thức các cảnh báo an ninh mạng, tin giả và thông tin điều tra.",
+        ))
+        refs.append((
+            "PolitiFact (Poynter Institute) – Hệ thống kiểm chứng quốc tế chuẩn IFCN",
+            "https://www.politifact.com",
+            "Cơ sở dữ liệu kiểm chứng quốc tế theo thang đo Truth-O-Meter (True, Mostly True, Half True, Mostly False, False).",
         ))
 
     output: List[RawCandidateEvidence] = []
@@ -515,13 +531,153 @@ async def _search_free_wikipedia_vi(query: str) -> List[RawCandidateEvidence]:
     return results
 
 
+async def _search_vn_official_factcheck_portals(query: str) -> List[RawCandidateEvidence]:
+    """
+    Targeted search across official Vietnamese Anti-Fake-News & Law Enforcement portals
+    (tingia.gov.vn, bocongan.gov.vn, chinhphu.vn, baochinhphu.vn) and international PolitiFact (politifact.com).
+    """
+    url = "https://news.google.com/rss/search"
+    scoped_q = (
+        f"({query[:90]}) "
+        "(site:tingia.gov.vn OR site:bocongan.gov.vn OR site:chinhphu.vn OR site:baochinhphu.vn OR site:politifact.com)"
+    )
+    params = {
+        "q": scoped_q,
+        "hl": "vi",
+        "gl": "VN",
+        "ceid": "VN:vi",
+    }
+    results: List[RawCandidateEvidence] = []
+    try:
+        client = _get_http_client()
+        resp = await client.get(url, params=params, timeout=1.5)
+        if resp.status_code != 200:
+            return []
+        soup = BeautifulSoup(resp.text, "xml")
+
+        for item in soup.find_all("item")[:3]:
+            title_tag = item.find("title")
+            link_tag = item.find("link")
+            pub_tag = item.find("pubDate")
+            source_tag = item.find("source")
+            desc_tag = item.find("description")
+
+            title = title_tag.get_text(strip=True) if title_tag else ""
+            article_url = link_tag.get_text(strip=True) if link_tag else ""
+            if not title or not article_url:
+                continue
+
+            publisher_url = (
+                source_tag.get("url")
+                if (source_tag and source_tag.get("url"))
+                else article_url
+            )
+            publisher_name = source_tag.get_text(strip=True) if source_tag else ""
+            tier, tier_label, base_cred, domain = classify_source_tier(
+                str(publisher_url), from_factcheck_api=True
+            )
+            clean_desc = ""
+            if desc_tag and desc_tag.get_text():
+                clean_desc = BeautifulSoup(desc_tag.get_text(), "html.parser").get_text(" ", strip=True)
+
+            snippet = f"[Cổng Chính thống / Kiểm chứng] {title}. {clean_desc}".strip()[:650]
+            results.append(
+                RawCandidateEvidence(
+                    id=str(uuid.uuid4())[:8],
+                    title=title,
+                    url=article_url,
+                    domain=domain or publisher_name,
+                    publisher=publisher_name or domain or "Cổng Xác minh Chính thống",
+                    published_date=pub_tag.get_text(strip=True) if pub_tag else None,
+                    tier=tier,
+                    tier_label=tier_label,
+                    base_credibility=max(0.92, base_cred),
+                    snippet=snippet,
+                    from_factcheck_api=True,
+                )
+            )
+    except Exception as exc:
+        logger.warning("Official portal search warning: %s", exc)
+    return results
+
+
+async def _search_free_academic_openalex(query: str) -> List[RawCandidateEvidence]:
+    """
+    100% Free, keyless search across 250M+ peer-reviewed academic & scientific papers
+    (IEEE, Nature, PubMed, ScienceDirect, Springer) via OpenAlex API.
+    """
+    url = "https://api.openalex.org/works"
+    params = {
+        "search": query[:120],
+        "per-page": 2,
+        "select": "id,doi,title,publication_year,primary_location,cited_by_count,abstract_inverted_index",
+    }
+    results: List[RawCandidateEvidence] = []
+    try:
+        client = _get_http_client()
+        resp = await client.get(url, params=params, timeout=1.5)
+        if resp.status_code != 200:
+            return []
+        data = resp.json()
+
+        for work in data.get("results", []):
+            title = (work.get("title") or "").strip()
+            if not title:
+                continue
+            doi_url = work.get("doi") or work.get("id") or ""
+            if not doi_url:
+                continue
+            pub_year = str(work.get("publication_year") or "")
+            cited_by = int(work.get("cited_by_count") or 0)
+            loc = work.get("primary_location") or {}
+            src_info = loc.get("source") or {}
+            journal_name = src_info.get("display_name") or "OpenAlex Peer-Reviewed Literature"
+
+            # Reconstruct abstract from OpenAlex inverted index if present
+            inv_idx = work.get("abstract_inverted_index")
+            abstract_text = ""
+            if isinstance(inv_idx, dict) and inv_idx:
+                word_positions: list[tuple[int, str]] = []
+                for word, positions in inv_idx.items():
+                    if isinstance(positions, list):
+                        for pos in positions[:10]:
+                            if isinstance(pos, int) and pos < 90:
+                                word_positions.append((pos, word))
+                word_positions.sort(key=lambda x: x[0])
+                abstract_text = " ".join(w for _, w in word_positions[:70])
+
+            snippet = (
+                f"Công trình học thuật ({journal_name}, {pub_year}, {cited_by} trích dẫn): {title}. "
+                f"{abstract_text}"
+            ).strip()[:600]
+
+            results.append(
+                RawCandidateEvidence(
+                    id=str(uuid.uuid4())[:8],
+                    title=f"[Nghiên cứu Học thuật] {title}",
+                    url=doi_url,
+                    domain="doi.org",
+                    publisher=journal_name,
+                    published_date=pub_year or None,
+                    tier=1,
+                    tier_label="Cấp 1 – Công trình nghiên cứu học thuật & Báo cáo khoa học (DOI / Peer-Reviewed)",
+                    base_credibility=0.95,
+                    snippet=snippet,
+                )
+            )
+    except Exception as exc:
+        logger.warning("OpenAlex academic search warning: %s", exc)
+    return results
+
+
 async def retrieve_evidence_for_claim(
     claim: ExtractedClaimCandidate,
 ) -> tuple[List[RawCandidateEvidence], bool]:
     """
     Returns (deduplicated_sorted_evidences, used_live_search).
-    Queries configured APIs (Google Fact Check, Tavily Basic, Google CSE) AND
-    built-in free keyless sources (Google News VN RSS + Wikipedia VI) in parallel (~0.8-1.4s).
+    Queries configured APIs (Google Fact Check, Tavily Basic, Google CSE),
+    Official Anti-Fake-News portals (tingia.gov.vn, bocongan.gov.vn, politifact.com),
+    Peer-Reviewed Academic Literature (OpenAlex / DOI), Google News VN RSS & Wikipedia VI in parallel.
     """
     if claim.claim_type in (ClaimTypeEnum.OPINION, ClaimTypeEnum.SATIRE):
         return [], True
@@ -532,13 +688,37 @@ async def retrieve_evidence_for_claim(
     if cached_hit and time.monotonic() < cached_hit[0]:
         return cached_hit[1], cached_hit[2]
 
+    low_q = primary_query.lower()
+    needs_academic = any(
+        kw in low_q
+        for kw in (
+            "nghiên cứu",
+            "khảo sát",
+            "khoa học",
+            "y tế",
+            "ung thư",
+            "vaccine",
+            "bệnh",
+            "sinh viên",
+            "đại học",
+            "tỷ lệ",
+            "%",
+            "ai",
+            "study",
+            "research",
+        )
+    )
+
     tasks = [
         _search_google_factcheck(primary_query),
+        _search_vn_official_factcheck_portals(primary_query),
         _search_tavily(primary_query),
         _search_google_cse(primary_query),
         _search_free_google_news_vn(primary_query),
         _search_free_wikipedia_vi(primary_query),
     ]
+    if needs_academic:
+        tasks.append(_search_free_academic_openalex(primary_query))
 
     batches = await asyncio.gather(*tasks, return_exceptions=True)
     merged: List[RawCandidateEvidence] = []

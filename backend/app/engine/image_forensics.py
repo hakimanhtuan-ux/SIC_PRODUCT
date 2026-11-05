@@ -64,7 +64,14 @@ _EDITING_SIGNATURES = [
     ("meitu", "Meitu Retouch"),
     ("capcut", "CapCut"),
     ("picsart", "PicsArt"),
-    ("canva", "Canva Design"),
+    ("canva", "Canva Graphic Design"),
+    ("adobe illustrator", "Adobe Illustrator (Thiết kế Vector)"),
+    ("illustrator", "Adobe Illustrator (Thiết kế Vector)"),
+    ("indesign", "Adobe InDesign (Dàn trang Ấn phẩm)"),
+    ("figma", "Figma Graphic Design"),
+    ("coreldraw", "CorelDRAW Graphic Design"),
+    ("affinity designer", "Affinity Designer"),
+    ("powerpoint", "Microsoft PowerPoint"),
     ("gimp", "GIMP Image Editor"),
     ("photopea", "Photopea"),
     ("luminar", "Luminar Neo"),
@@ -74,6 +81,16 @@ _EDITING_SIGNATURES = [
     ("polarr", "Polarr Filter"),
     ("adjustmentrender", "Apple Photos Editor (Đã chỉnh sửa trên iPhone/Mac)"),
 ]
+
+_DESIGN_APP_NEEDLES = (
+    "canva",
+    "illustrator",
+    "indesign",
+    "figma",
+    "coreldraw",
+    "affinity designer",
+    "powerpoint",
+)
 
 _FACESWAP_SIGNATURES = [
     ("faceapp", "FaceApp (Biến đổi khuôn mặt AI)"),
@@ -259,20 +276,28 @@ class VisionForensicsLLMOutput(BaseModel):
         default="",
         description="Toàn bộ chữ viết, tiêu đề bài báo, số liệu, thông điệp hoặc nội dung văn bản nhìn thấy trong ảnh (OCR). Nếu không có chữ, để chuỗi rỗng ''.",
     )
+    claim_verifiability_note_vi: str = Field(
+        default="",
+        description=(
+            "Đánh giá điều kiện xác minh thông tin trên ảnh: Ghi rõ thông tin trên ảnh CÓ ĐỦ ĐIỀU KIỆN XÁC MINH CÔNG KHAI "
+            "(ví dụ: tin tức, cảnh báo mạo danh Bộ Công an/Chính phủ/tingia.gov.vn, số liệu thống kê, phát ngôn, y tế/khoa học) "
+            "hay CHƯA ĐỦ ĐIỀU KIỆN / KHÔNG CẦN XÁC MINH DỮ KIỆN (ví dụ: chữ trang trí nghệ thuật, giải đấu nội bộ tự đặt, ảnh cá nhân không chứa mệnh đề sự thật)."
+        ),
+    )
     in_image_factual_claims: List[str] = Field(
         default_factory=list,
         description=(
-            "Danh sách các mệnh đề/tuyên bố dữ kiện cụ thể cần kiểm chứng nêu trong ảnh hoặc tiêu đề/chữ trong ảnh "
-            "(ví dụ: phát ngôn của ai, số liệu kinh tế/y tế, tin đồn, bài thuốc, chính sách, sự kiện diễn ra). "
-            "Tối đa 3-4 câu ngắn gọn, độc lập. Nếu ảnh là ảnh chụp phong cảnh hoặc người không chứa tuyên bố thông tin sự thật, để danh sách rỗng []."
+            "Danh sách các mệnh đề/tuyên bố dữ kiện cụ thể ĐỦ ĐIỀU KIỆN XÁC MINH nêu trong ảnh "
+            "(ví dụ: thông báo/cảnh báo gắn mác cơ quan chức năng, phát ngôn của nhân vật công chúng, số liệu kinh tế/y tế/khoa học, sự kiện thời sự). "
+            "Tối đa 3 câu ngắn gọn, độc lập. Nếu thông tin trên ảnh không đủ điều kiện kiểm chứng công khai hoặc ảnh không có chữ sự thật, để danh sách rỗng []."
         ),
     )
 
 
-IMAGE_FORENSICS_SYSTEM_PROMPT = """Bạn là Chuyên gia Trưởng Giám định Pháp y Hình ảnh Số & Phát hiện AI/Deepfake của FactCheck Assistent.
+IMAGE_FORENSICS_SYSTEM_PROMPT = """Bạn là Chuyên gia Trưởng Giám định Pháp y Hình ảnh Số, Phân biệt Thiết kế Đồ họa vs AI (theo chuẩn DeepAI Detector & Học thuật CVPR/ICCV DIRE/NPR) và Kiểm chứng Thông tin (theo chuẩn tingia.gov.vn, bocongan.gov.vn, PolitiFact) của FactCheck Assistent.
 Bạn được cung cấp HÌNH 1 (Ảnh toàn khung hình) và HÌNH 2 (Ảnh phóng đại cận cảnh vùng Mặt–Cổ–Tay hoặc vùng Chữ viết/Logo chi tiết trích từ Hình 1). Mọi tọa độ `box_2d` [ymin, xmin, ymax, xmax] (0..1000) BẮT BUỘC tính theo hệ tọa độ của HÌNH 1.
 
-Hãy thực hiện quy trình rà soát 5 NHÓM DẤU HIỆU KHOA HỌC dưới đây một cách tỉ mỉ, không bỏ sót bất kỳ chi tiết nhỏ nào:
+Hãy thực hiện quy trình rà soát 6 NHÓM DẤU HIỆU KHOA HỌC dưới đây một cách tỉ mỉ, không bỏ sót bất kỳ chi tiết nhỏ nào:
 
 1. NHÓM 1 — BẮT LỖI ẢNH GỐC NHƯNG ĐÃ DÙNG AI THAY/GHÉP KHUÔN MẶT (`FACE_SWAP_OR_DEEPFAKE`, `category = "FACE_SWAP_ERROR"`):
    - CẢNH BÁO ĐẶC BIỆT: Người dùng rất hay lấy một bức ảnh chụp thật từ máy ảnh cơ / điện thoại (vẫn còn nguyên EXIF Sony/Canon/iPhone, màu Lightroom, xóa phông ống kính thật, áo dài/trang phục và bàn tay thật), rồi dùng AI (Gemini Edit, Photoshop Generative Fill, InsightFace, Remaker...) chỉ để THAY KHUÔN MẶT KHÁC vào!
@@ -282,38 +307,50 @@ Hãy thực hiện quy trình rà soát 5 NHÓM DẤU HIỆU KHOA HỌC dưới 
      + (c) VẾT HÒA TRỘN (BLENDING SEAM): Viền mờ quanh xương hàm, dưới cằm, mai tóc, vành tai hoặc góc gắn đầu vào cổ hơi gượng so với trục vai.
    - NẾU phát hiện sự khác biệt màu da hoặc độ mịn/kết cấu da giữa Đầu/Mặt và Cổ/Thân/Tay -> BẮT BUỘC kết luận `FACE_SWAP_OR_DEEPFAKE` (`face_swap_risk_pct` và `face_swap_deepfake_pct` từ 78–98%), khoanh vùng `FACE_SWAP_ERROR` bao trùm khuôn mặt và vùng tiếp giáp cổ! TUYỆT ĐỐI KHÔNG xếp nhầm thành `EDITED_COLOR_OR_RETOUCH`!
 
-2. NHÓM 2 — NHẬN DIỆN ẢNH CHÂN DUNG / NGOẠI CẢNH DO AI TẠO SINH THẾ HỆ MỚI (`AI_GENERATED`, `category = "AI_GENERATED_ERROR"`):
+2. NHÓM 2 — NHẬN DIỆN ẢNH CHÂN DUNG / NGOẠI CẢNH DO AI TẠO SINH THẾ HỆ MỚI (`AI_GENERATED`, `category = "AI_GENERATED_ERROR"` — theo mô hình DeepAI AI-Image-Detector & DIRE/NPR Frequency Residual):
    - AI tạo ảnh hiện đại (ChatGPT/GPT-Image, Gemini Nano Banana/Imagen, Flux, Midjourney v6, Seedream) đã vẽ được 5 ngón tay khá chuẩn! ĐỪNG VỘI kết luận ảnh thật chỉ vì thấy 5 ngón tay hay sóng biển/vách đá nét!
    - Hãy soi kỹ 6 dấu hiệu tố cáo ảnh AI tạo sinh đời mới:
      + (a) CHỮ IN / KÝ HIỆU TRÊN ÁO QUẦN, NHẴN MÁC, BIỂN HIỆU: Chữ vô nghĩa, ký tự lạ đứt gãy hoặc không tồn tại trong thực tế (ví dụ: chữ lạ như `--C21` in giữa áo tắm/áo ngực, chữ loằng ngoằng trên mũ/giày/biển báo).
      + (b) LỖI BÀN CHÂN, GIÀY DÉP & CHI PHỤ BỊ BIẾN MẤT: Chân trước đi dép/giày rõ ràng (như dép sục nhựa trắng) nhưng BÀN CHÂN SAU lại tự nhiên biến mất, cụt ngủn hoặc tan hòa vào bọt sóng biển / thảm cỏ mà không hề có chiếc dép thứ hai! Kính râm cài trên đầu bị bẹt/méo phi vật lý, dây áo/khuy áo/trang sức bất đối xứng.
-     + (c) DA & TÓC KHUẾCH TÁN (DIFFUSION TEXTURE): Bề mặt da toàn thân (mặt, bụng, đùi, chân) láng mịn đồng nhất như tượng sáp/nhựa sứ, thiếu hoàn toàn vi nhiễu cảm biến máy ảnh thật; ánh sáng phủ đều khắp cơ thể bất chấp ngược sáng ngoài trời.
+     + (c) DA & TÓC KHUẾCH TÁN (DIFFUSION MICRO-TEXTURE): Bề mặt da toàn thân (mặt, bụng, đùi, chân) láng mịn đồng nhất như tượng sáp/nhựa sứ, thiếu hoàn toàn vi nhiễu cảm biến máy ảnh thật; ánh sáng phủ đều khắp cơ thể bất chấp ngược sáng ngoài trời.
      + (d) TƯƠNG TÁC VẬT LÝ GIẢ TẠO: Bọt nước, cát, sỏi, lá cây tiếp xúc với cơ thể/giày dép theo kiểu hòa tan mờ ảo thiếu bóng đổ tiếp xúc thực tế; các vân đá/hậu cảnh xa lặp lại hoặc bệt dính vi mô.
      + (e) DẤU VẾT C2PA / JUMBF AI: Nếu siêu dữ liệu tệp chứa chữ ký C2PA/JUMBF của công cụ AI mà không có EXIF máy ảnh thật -> Khẳng định chắc chắn `AI_GENERATED`.
 
-3. NHÓM 3 — NHẬN DIỆN POSTER / THIẾT KẾ QUẢNG CÁO DO AI TẠO SINH (`AI_GENERATED`, TUYỆT ĐỐI KHÔNG NHẦM VỚI `EDITED_OR_SPLICED` HAY `SCREENSHOT_OR_MEME`):
-   - Người dùng hiện nay thường dùng ChatGPT, Gemini, Ideogram, Flux để tạo TRỌN GÓI một tấm Poster thể thao, giải đấu, sự kiện, quảng cáo có cả chữ tiêu đề, cầu thủ/người mẫu và logo!
-   - ĐỪNG THẤY bố cục Poster có chữ & nhiều nhân vật mà vội bảo là "thiết kế đồ họa cắt ghép truyền thống (`EDITED_OR_SPLICED`)"! Hãy kiểm tra ngay 5 dấu hiệu đặc trưng của POSTER DO AI TẠO:
-     + (a) MÂU THUẪN NGỮ NGHĨA GIỮA LOGO VÀ TÊN ĐỘI / ĐƠN VỊ: Đọc kỹ chữ chạy vòng trong Logo so với dòng tên bên dưới! Ví dụ tên đội dưới ghi `"THCS LÊ HỒNG PHONG"` nhưng chữ bên trong vòng tròn logo ngay phía trên lại bị AI bịa thành `"TH HIGH SCHOOL - LTS - LEADING THE FUTURE"`, hoặc chữ sau lưng áo cầu thủ (`"FC TRÍ DŨNG"`) không ăn khớp với hai đội thi đấu! Designer người thật không bao giờ vẽ logo sai tên trường/đội ngớ ngẩn như vậy.
-     + (b) LỖI CHỮ NHỎ, SLOGAN NHÀ TÀI TRỢ & DẤU TIẾNG VIỆT: Tiêu đề lớn có thể rõ nhưng các logo nhỏ ở chân poster, huy hiệu nhỏ trên áo/vòng tròn, dòng slogan phụ bị nhòe dính nét, chữ biến dạng giả chữ thật, hoặc dấu tiếng Việt (`ấ, ể, ộ, ữ, ỉ, đ`) méo lệch.
-     + (c) TRÙNG LẶP / PHI LÝ NHÂN VẬT TRÊN POSTER: Hai cầu thủ có khuôn mặt khác nhau trong cùng một đội lại mặc TRÙNG SỐ ÁO (ví dụ cả hai cùng mặc số `8`), nắm tay/ngón tay cầu thủ bị bệt dính, da mặt mọi cầu thủ đều mang chất liệu vẽ máy láng mịn kiểu AIイラスト/render.
-     + (d) HẬU CẢNH RENDER KHUẾCH TÁN: Đám đông khán giả trên khán đài sân vận động nhòe thành mảng hạt vô định hình chứ không phải ảnh chụp sân thật.
-   - HỄ Poster có các dấu hiệu trên (hoặc có chữ ký C2PA/JUMBF trong tệp) -> BẮT BUỘC kết luận `AI_GENERATED` (`ai_generated_pct` 88–99%), ghi rõ: "Đây là Poster đồ họa được tạo sinh bằng AI (không phải ảnh chụp thật hay poster thiết kế cắt ghép thủ công)", và khoanh vùng `AI_GENERATED_ERROR` vào các logo lệch tên, chữ nhỏ biến dạng và nhân vật trùng/lỗi!
+3. NHÓM 3 — PHÂN BIỆT RẠCH RÒI GIỮA:
+   (A) ẤN PHẨM THIẾT KẾ BẰNG ỨNG DỤNG ĐỒ HỌA (`SCREENSHOT_OR_MEME`: Canva, Photoshop, Illustrator, Figma, Banner Báo chí, Quote Card)
+   VỚI
+   (B) POSTER / ẢNH ĐỒ HỌA DO AI TẠO SINH (`AI_GENERATED`: ChatGPT, Gemini, Ideogram, Flux):
+   - RẤT QUAN TRỌNG: Khi gặp một bức ảnh có chữ viết, khung đồ họa, banner thông báo, infographic hoặc poster, bạn BẮT BUỘC phải phân biệt xem nó được dựng bằng ỨNG DỤNG THIẾT KẾ ĐỒ HỌA của con người hay do MÔ HÌNH AI TẠO SINH vẽ ra:
+     * DẤU HIỆU CỦA ỨNG DỤNG THIẾT KẾ ĐỒ HỌA (`SCREENSHOT_OR_MEME` — Canva, Illustrator, Photoshop, Figma, PowerPoint, Ảnh chụp màn hình):
+       1. Phông chữ Vector (Vector Typography) chuẩn xác 100%: Mọi con chữ cùng font có hình học đồng nhất tuyệt đối, mép chữ sắc nét toán học, dấu tiếng Việt (`ấ, ể, ộ, ữ, ỉ, đ`) chuẩn xác 100% ở cả chữ tiêu đề lẫn chữ chú thích nhỏ.
+       2. Logo cơ quan / trường học / báo chí / thương hiệu chuẩn xác và khớp hoàn toàn với tên đơn vị bên dưới (không bị AI bịa chữ tiếng Anh vô nghĩa vào trong vòng tròn logo).
+       3. Nền phẳng (Flat Color), dải chuyển màu toán học (Gradient mượt), khung bố cục đối xứng chuẩn thiết kế hoặc giao diện chụp màn hình điện thoại/mạng xã hội. Nếu có ảnh người thật được tách nền ghép vào khung banner của Canva/Photoshop mà khuôn mặt là ảnh thật -> Kết luận `SCREENSHOT_OR_MEME` và ghi rõ trong `summary_explanation_vi`: `"Ấn phẩm được thiết kế bằng ứng dụng đồ họa (Canva / Photoshop / Illustrator) hoặc ảnh chụp màn hình, không phải ảnh do AI tạo sinh"`.
+     * DẤU HIỆU CỦA POSTER / ẤN PHẨM DO AI TẠO SINH (`AI_GENERATED`):
+       1. MÂU THUẪN NGỮ NGHĨA GIỮA LOGO VÀ TÊN ĐỘI / ĐƠN VỊ: Ví dụ tên đội dưới ghi `"THCS LÊ HỒNG PHONG"` nhưng chữ bên trong vòng tròn logo ngay phía trên lại bị AI bịa thành `"TH HIGH SCHOOL - LTS - LEADING THE FUTURE"`, hoặc chữ sau lưng áo cầu thủ (`"FC TRÍ DŨNG"`) không ăn khớp với hai đội thi đấu!
+       2. LỖI CHỮ NHỎ, SLOGAN NHÀ TÀI TRỢ & DẤU TIẾNG VIỆT: Các logo nhỏ ở chân poster, huy hiệu nhỏ trên áo/vòng tròn, dòng chữ phụ bị nhòe dính nét, biến dạng ký tự giả chữ thật, hoặc dấu tiếng Việt méo lệch.
+       3. TRÙNG LẶP / PHI LÝ NHÂN VẬT & HẬU CẢNH KHUẾCH TÁN: Hai cầu thủ khác nhau mặc TRÙNG SỐ ÁO (ví dụ cùng mặc số `8`), bàn tay cầu thủ bệt dính, da mặt vẽ máy kiểu AI render, đám đông khán giả trên khán đài nhòe thành hạt khuếch tán vô định hình.
+       -> HỄ có các dấu hiệu AI trên (hoặc có chữ ký C2PA/JUMBF trong tệp) -> BẮT BUỘC kết luận `AI_GENERATED` (`ai_generated_pct` 88–99%), ghi rõ: `"Đây là Poster / Ấn phẩm đồ họa được tạo sinh bằng AI (không phải thiết kế bằng ứng dụng Canva/Photoshop truyền thống hay ảnh chụp thật)"`, và khoanh vùng `AI_GENERATED_ERROR`!
 
 4. NHÓM 4 — ẢNH CHỤP THẬT ĐÃ QUA CHỈNH MÀU / FILTER (`EDITED_COLOR_OR_RETOUCH`, `category = "COLOR_GRADING_ERROR"`):
-   - CHỈ KẾT LUẬN mục này khi đã kiểm tra kỹ Nhóm 1–3 và chắc chắn: (1) Không phải ảnh AI tạo, (2) Khuôn mặt – Cổ – Tay ĐỒNG NHẤT tự nhiên về màu da & độ mịn hạt cảm biến (KHÔNG bị thay mặt AI), (3) Không cắt ghép vật thể, NHƯNG có dấu vết chỉnh màu Lightroom/VSCO/Snapseed/Filter hoặc kéo đường cong sáng tối Tone Curve, Matte Fade, Split-Toning.
+   - CHỈ KẾT LUẬN mục này khi đã kiểm tra kỹ Nhóm 1–3 và chắc chắn: (1) Không phải ảnh AI tạo hay ấn phẩm thiết kế đồ họa, (2) Khuôn mặt – Cổ – Tay ĐỒNG NHẤT tự nhiên về màu da & độ mịn hạt cảm biến (KHÔNG bị thay mặt AI), (3) Không cắt ghép vật thể, NHƯNG có dấu vết chỉnh màu Lightroom/VSCO/Snapseed/Filter hoặc kéo đường cong sáng tối Tone Curve, Matte Fade, Split-Toning.
 
 5. NHÓM 5 — ẢNH CHỤP THẬT NGUYÊN BẢN (`AUTHENTIC_LIKELY`):
-   - Khi ảnh mang đầy đủ đặc tính quang học máy ảnh/điện thoại tự nhiên: hạt nhiễu cảm biến đồng nhất, màu da và độ mịn giữa Mặt – Cổ – Tay liền mạch tự nhiên, bàn tay/bàn chân/giày dép/chữ viết chuẩn xác thực tế, và màu sắc trung thực chưa bị áp bộ lọc màu mạnh (lưu ý: xóa phông nhẹ của điện thoại hoặc mất EXIF do gửi qua Zalo/Messenger vẫn là `AUTHENTIC_LIKELY` nếu không phạm bất kỳ lỗi nào của Nhóm 1–4). Đặt `suspicious_regions = []` và tổng 4 tỷ lệ `%` luôn bằng 100.
+   - Khi ảnh mang đầy đủ đặc tính quang học máy ảnh/điện thoại tự nhiên: hạt nhiễu cảm biến đồng nhất, màu da và độ mịn giữa Mặt – Cổ – Tay liền mạch tự nhiên, bàn tay/bàn chân/giày dép/chữ viết chuẩn xác thực tế, và màu sắc trung thực chưa bị áp bộ lọc màu mạnh. Đặt `suspicious_regions = []` và tổng 4 tỷ lệ `%` luôn bằng 100.
 
-6. NHÓM 6 — ĐỌC VĂN BẢN (OCR) VÀ TRÍCH XUẤT CÁC MỆNH ĐỀ THÔNG TIN CẦN XÁC THỰC:
-   - Rất nhiều ảnh trên mạng là ảnh chụp bài báo, ảnh chụp màn hình mạng xã hội (Facebook/TikTok/Zalo), quote card (ảnh kèm phát ngôn), poster sự kiện, bảng số liệu, văn bản hoặc bài thuốc lan truyền.
-   - Bạn BẮT BUỘC phải đọc kỹ chữ viết trong ảnh:
-     + Ghi toàn bộ nội dung chữ đọc được vào `extracted_text_content`.
-     + Nếu trong ảnh có chứa các tuyên bố về sự kiện, con số thống kê, chính sách, phát ngôn của người nổi tiếng, hoặc tin tức cần đối chiếu đúng/sai -> hãy tách thành 1–3 câu khẳng định độc lập, rõ ràng vào `in_image_factual_claims` để hệ thống tự động kiểm chứng thông tin từ các nguồn chính thống.
-     + Nếu ảnh chỉ là chân dung, phong cảnh hoặc ảnh sinh hoạt thuần túy không chứa thông tin cần xác minh tính thật/giả của nội dung, hãy để `in_image_factual_claims = []`.
+6. NHÓM 6 — ĐỌC VĂN BẢN (OCR), ĐÁNH GIÁ ĐIỀU KIỆN XÁC MINH & KIỂM CHỨNG THÔNG TIN TRÊN HÌNH ẢNH (THEO CHUẨN TINGIA.GOV.VN, BOCONGAN.GOV.VN, POLITIFACT & HỌC THUẬT):
+   - Bạn BẮT BUỘC đọc toàn bộ chữ viết trong ảnh và ghi vào `extracted_text_content`.
+   - Tiếp theo, thẩm định xem nội dung thông tin trên ảnh CÓ ĐỦ ĐIỀU KIỆN ĐỂ XÁC MINH SỰ THẬT CÔNG KHAI HAY KHÔNG và giải thích rõ vào `claim_verifiability_note_vi`:
+     + TRƯỜNG HỢP ĐỦ ĐIỀU KIỆN XÁC MINH (`in_image_factual_claims` có 1–3 mệnh đề): Khi chữ trên ảnh (dù là ảnh chụp màn hình, banner thiết kế Canva/Photoshop hay ảnh AI) chứa thông tin mang tính sự thật công cộng cần kiểm chứng như:
+       * Tin tức thời sự, văn bản/thông báo/cảnh báo mạo danh hoặc trích dẫn cơ quan nhà nước (`Bộ Công an - bocongan.gov.vn`, `Chính phủ`, `Trung tâm Xử lý tin giả Việt Nam - tingia.gov.vn`, `Bộ Y tế`, `Bộ Giáo dục`...), cảnh báo lừa đảo, an ninh trật tự.
+       * Số liệu thống kê kinh tế/xã hội, chính sách pháp luật, mức phạt, lịch sự kiện quốc gia/quốc tế có thật.
+       * Phát ngôn trích dẫn của lãnh đạo, người nổi tiếng, chuyên gia (theo chuẩn Fact-Check của `PolitiFact`).
+       * Thông tin khoa học, y học, sức khỏe, bài thuốc, công nghệ (để đối chiếu tài liệu học thuật bình duyệt quốc tế DOI/OpenAlex/PubMed/IEEE).
+       -> Hãy tách thành 1–3 câu mệnh đề độc lập, đầy đủ chủ ngữ - vị ngữ vào `in_image_factual_claims`.
+     + TRƯỜNG HỢP CHƯA ĐỦ ĐIỀU KIỆN / KHÔNG CẦN XÁC MINH DỮ KIỆN (`in_image_factual_claims = []`):
+       * Khi ảnh không có chữ, hoặc chỉ có chữ trang trí nghệ thuật, slogan cảm xúc cá nhân, logo áo quần ngẫu nhiên (`--C21`), hoặc tên trận giao hữu/giải đấu phong trào nội bộ tự đặt trên poster cá nhân mà không nêu tuyên bố sự kiện/tin tức công cộng nào có thể tra cứu kiểm chứng.
+       -> Để `in_image_factual_claims = []` và ghi rõ lý do vào `claim_verifiability_note_vi`.
 
-YÊU CẦU TỐC ĐỘ PHẢN HỒI: Diễn đạt ngắn gọn, súc tích, đi thẳng vào bằng chứng đắt giá nhất (mỗi phần giải thích 1–2 câu rõ nét, `forensic_signals` tối đa 4 ý ngắn, `suspicious_regions` tối đa 3 vùng rõ nhất)."""
+YÊU CẦU TỐC ĐỘ PHẢN HỒI: Diễn đạt ngắn gọn, súc tích, đi thẳng vào bằng chứng đắt giá nhất (mỗi phần giải thích 1–2 câu rõ nét, `forensic_signals` tối đa 5 ý ngắn, `suspicious_regions` tối đa 3 vùng rõ nhất)."""
 
 
 def _detect_mime_and_format(image_bytes: bytes, filename: str) -> tuple[str, str]:
@@ -336,7 +373,7 @@ def _detect_mime_and_format(image_bytes: bytes, filename: str) -> tuple[str, str
 
 
 def _scan_binary_metadata(image_bytes: bytes) -> dict:
-    """Full-buffer binary scan (~3ms) for Camera EXIF, XMP Color Adjustments, Editing Software & C2PA/IPTC AI provenance."""
+    """Full-buffer binary scan (~3ms) for Camera EXIF, XMP Color Adjustments, Graphic Design Apps & C2PA/IPTC AI provenance."""
     head = image_bytes[:131072]
     low_latin = image_bytes.decode("latin-1", errors="ignore").lower()
     text_latin = head.decode("latin-1", errors="ignore")
@@ -347,6 +384,8 @@ def _scan_binary_metadata(image_bytes: bytes) -> dict:
     for needle, label in _EDITING_SIGNATURES + _FACESWAP_SIGNATURES:
         if needle in low_latin and label not in software_found:
             software_found.append(label)
+
+    has_design_app_sw = any(k in low_latin for k in _DESIGN_APP_NEEDLES)
 
     c2pa_ai_found: List[str] = []
     for needle, label in _GENAI_SIGNATURES:
@@ -397,6 +436,7 @@ def _scan_binary_metadata(image_bytes: bytes) -> dict:
     elif (
         ("c2pa" in low_latin or "jumbf" in low_latin)
         and not has_camera_hardware_exif
+        and not has_design_app_sw
         and not any(ed in low_latin for ed in ("lightroom", "capture one", "camera raw"))
     ):
         ai_provenance = "PURE_AI_GENERATED"
@@ -407,6 +447,7 @@ def _scan_binary_metadata(image_bytes: bytes) -> dict:
         "has_exif": has_exif,
         "has_camera_hardware_exif": has_camera_hardware_exif,
         "has_photoshop_or_faceswap_sw": has_photoshop_or_faceswap_sw,
+        "has_design_app_sw": has_design_app_sw,
         "camera_info": camera_found,
         "software_traces": software_found,
         "c2pa_or_ai_watermark": ", ".join(c2pa_ai_found) if c2pa_ai_found else None,
@@ -537,6 +578,8 @@ def _compute_ela_and_color_forensics(image_bytes: bytes) -> dict:
 
     vivid_sat_px = 0
     channel_clip_px = 0
+    flat_vector_px = 0
+    sharp_vector_edge_px = 0
     shadow_rb_sum, shadow_gm_sum, shadow_cnt = 0.0, 0.0, 0
     high_rb_sum, high_gm_sum, high_cnt = 0.0, 0.0, 0
     mid_rb_sum, mid_gm_sum, mid_cnt = 0.0, 0.0, 0
@@ -558,6 +601,16 @@ def _compute_ela_and_color_forensics(image_bytes: bytes) -> dict:
             r = src_buf[s_idx]
             g = src_buf[s_idx + 1]
             b = src_buf[s_idx + 2]
+
+            if px + 1 < w:
+                nr = src_buf[s_idx + 3]
+                ng = src_buf[s_idx + 4]
+                nb = src_buf[s_idx + 5]
+                step_diff = abs(r - nr) + abs(g - ng) + abs(b - nb)
+                if step_diff <= 2:
+                    flat_vector_px += 1
+                elif step_diff >= 115:
+                    sharp_vector_edge_px += 1
 
             hist_r[r] += 1
             hist_g[g] += 1
@@ -709,6 +762,8 @@ def _compute_ela_and_color_forensics(image_bytes: bytes) -> dict:
 
     vivid_sat_pct = round(vivid_sat_px * 100.0 / total_px, 1)
     channel_clip_pct = round(channel_clip_px * 100.0 / total_px, 1)
+    flat_vector_pct = round(flat_vector_px * 100.0 / total_px, 1)
+    sharp_edge_pct = round(sharp_vector_edge_px * 100.0 / total_px, 2)
 
     split_tone_shift = 0.0
     if shadow_cnt >= total_px * 0.03 and high_cnt >= total_px * 0.03:
@@ -762,6 +817,11 @@ def _compute_ela_and_color_forensics(image_bytes: bytes) -> dict:
             f"Có {channel_clip_pct}% điểm ảnh bị kịch trần kênh màu đơn lẻ do tăng màu hoặc tương phản mạnh."
         )
 
+    if flat_vector_pct >= 36.0 and sharp_edge_pct >= 0.45:
+        color_indicators.append(
+            f"Cấu trúc điểm ảnh chứa {flat_vector_pct}% mảng màu phẳng kết hợp biên chữ/vector sắc nét ({sharp_edge_pct}%) — đặc trưng của ứng dụng thiết kế đồ họa (Canva/Illustrator/Photoshop) hoặc ảnh chụp màn hình."
+        )
+
     color_score = min(1.0, round(color_score, 2))
 
     heat_pix = fitz.Pixmap(fitz.csRGB, w, h, bytes(heatmap_bytes), False)
@@ -782,6 +842,8 @@ def _compute_ela_and_color_forensics(image_bytes: bytes) -> dict:
         "p01_lum": p01_lum,
         "vivid_sat_pct": vivid_sat_pct,
         "channel_clip_pct": channel_clip_pct,
+        "flat_vector_pct": flat_vector_pct,
+        "sharp_edge_pct": sharp_edge_pct,
         "split_tone_shift": split_tone_shift,
         "midtone_cast": midtone_cast,
         "color_edit_score": color_score,
@@ -869,10 +931,13 @@ def _calibrate_forensics_decision(
 
     has_cam_exif = bool(meta_info.get("has_camera_hardware_exif"))
     has_ps_or_faceswap_sw = bool(meta_info.get("has_photoshop_or_faceswap_sw"))
+    has_design_app_sw = bool(meta_info.get("has_design_app_sw"))
     has_ai_meta = bool(meta_info.get("c2pa_or_ai_watermark"))
     ai_provenance = str(meta_info.get("ai_provenance") or "NONE")
     has_edit_meta = bool(meta_info.get("software_traces"))
     color_score = float(pixel_info.get("color_edit_score") or 0.0)
+    flat_vector_pct = float(pixel_info.get("flat_vector_pct") or 0.0)
+    sharp_edge_pct = float(pixel_info.get("sharp_edge_pct") or 0.0)
     color_indicators: List[str] = list(pixel_info.get("color_indicators") or [])
 
     has_face_swap_region = any(
@@ -891,7 +956,7 @@ def _calibrate_forensics_decision(
             if was_other:
                 summary = (
                     f"Phát hiện chứng thực nguồn gốc số C2PA / chữ ký tạo sinh AI trực tiếp trong tệp ({meta_info.get('c2pa_or_ai_watermark')}). "
-                    f"Đây là ảnh / ấn phẩm đồ họa do AI tạo sinh (GenAI), không phải ảnh chụp thật. {summary}"
+                    f"Đây là ảnh / ấn phẩm đồ họa do AI tạo sinh (GenAI), không phải ảnh chụp thật hay thiết kế Canva/Photoshop thông thường. {summary}"
                 )
             for r in regions:
                 if r.category in ("EDIT_SPLICE_ERROR", "COLOR_GRADING_ERROR", "OTHER_ERROR"):
@@ -943,7 +1008,37 @@ def _calibrate_forensics_decision(
             "Thân người và bối cảnh gốc được chụp từ máy ảnh thật, nhưng khuôn mặt có dấu hiệu đã bị thay thế / chỉnh sửa tái tạo bằng AI (Face-Swap / AI Inpainting)."
         )
 
-    # --- GUARDRAIL C: Real Camera Hardware EXIF without AI/Photoshop/FaceSwap evidence -> Prevent false AI_GENERATED ---
+    # --- GUARDRAIL C1: Graphic Design Application (Canva / Illustrator / Figma / PowerPoint) without AI watermark ---
+    elif (
+        has_design_app_sw
+        and not has_ai_meta
+        and verdict in (ImageAuthenticityEnum.AUTHENTIC_LIKELY, ImageAuthenticityEnum.EDITED_COLOR_OR_RETOUCH)
+    ):
+        verdict = ImageAuthenticityEnum.SCREENSHOT_OR_MEME
+        edit_p = max(edit_p, 82.0)
+        auth_p = min(auth_p, 12.0)
+        ai_p = min(ai_p, 6.0)
+        conf_pct = max(conf_pct, 88.0)
+        summary = (
+            f"Phát hiện chữ ký ứng dụng thiết kế đồ họa ({', '.join(meta_info.get('software_traces') or ['Canva / Illustrator'])}). "
+            f"Đây là ấn phẩm được thiết kế bằng ứng dụng đồ họa, không phải ảnh chụp nguyên bản hay ảnh do AI tạo sinh. {summary}"
+        )
+
+    # --- GUARDRAIL C2: Calibrate SCREENSHOT_OR_MEME (Graphic Design App / Screenshot) probabilities ---
+    elif verdict == ImageAuthenticityEnum.SCREENSHOT_OR_MEME:
+        edit_p = max(edit_p, 78.0)
+        ai_p = min(ai_p, 12.0)
+        auth_p = min(auth_p, 15.0)
+        conf_pct = max(conf_pct, 85.0)
+        if flat_vector_pct >= 32.0:
+            vec_sig = (
+                f"Phân tích hình học điểm ảnh: {flat_vector_pct}% mảng màu vector phẳng và biên chữ sắc nét ({sharp_edge_pct}%) — "
+                "khẳng định ấn phẩm được dựng bằng phần mềm thiết kế đồ họa (Canva / Photoshop / Illustrator) hoặc ảnh chụp màn hình."
+            )
+            if vec_sig not in signals:
+                signals.insert(0, vec_sig)
+
+    # --- GUARDRAIL C3: Real Camera Hardware EXIF without AI/Photoshop/FaceSwap evidence -> Prevent false AI_GENERATED ---
     elif (
         has_cam_exif
         and not has_ai_meta
@@ -1076,6 +1171,8 @@ async def run_image_verification_pipeline(
             "p01_lum": 0,
             "vivid_sat_pct": 0.0,
             "channel_clip_pct": 0.0,
+            "flat_vector_pct": 0.0,
+            "sharp_edge_pct": 0.0,
             "split_tone_shift": 0.0,
             "midtone_cast": 0.0,
             "color_edit_score": 0.0,
@@ -1126,19 +1223,20 @@ async def run_image_verification_pipeline(
         f"Thông số kỹ thuật tệp ảnh ({fmt_name}, {w}x{h}px — {dim_note}, {tech_info.file_size_kb} KB):\n"
         f"1. Siêu dữ liệu thiết bị, phần mềm & chứng thực nguồn gốc:\n"
         f"- EXIF phần cứng camera: {exif_prompt_line}\n"
-        f"- Chữ ký phần mềm chỉnh sửa / hậu kỳ trong tệp: {', '.join(tech_info.software_traces) or 'Không phát hiện'}\n"
+        f"- Chữ ký phần mềm chỉnh sửa / thiết kế đồ họa trong tệp: {', '.join(tech_info.software_traces) or 'Không phát hiện'}\n"
         f"- Chữ ký chứng thực C2PA / công cụ tạo ảnh AI trong tệp: {tech_info.c2pa_or_ai_watermark or 'Không phát hiện'} (Mức xác thực AI từ metadata: {meta_info['ai_provenance']})\n\n"
-        f"2. Chỉ số Đo Màu Sắc, Dải Sáng & Cắt Ghép Toán Học (tính trực tiếp từ điểm ảnh RGB):\n"
+        f"2. Chỉ số Đo Màu Sắc, Hình Học Vector & Khuếch Tán Điểm Ảnh (theo chuẩn DeepAI Detector & Học thuật DIRE/NPR):\n"
+        f"- Tỷ lệ mảng màu phẳng Vector (Flat-Patch Ratio): {pixel_info['flat_vector_pct']}% | Mật độ biên chữ/vector sắc nét: {pixel_info['sharp_edge_pct']}%\n"
         f"- Điểm nghi vấn chỉnh màu / áp bộ lọc (Color-Grading Score): {pixel_info['color_edit_score']} / 1.0\n"
         f"- Chỉ số răng lược Histogram RGB (kéo Curve/Contrast): {pixel_info['comb_ratio']} | Nâng mờ vùng tối Matte Black: {'Có (sàn đen=' + str(pixel_info['p01_lum']) + '/255)' if pixel_info['has_lifted_matte_blacks'] else 'Không'}\n"
         f"- Độ lệch pha màu Vùng tối - Vùng sáng (Split-Toning): {pixel_info['split_tone_shift']} | Độ ám màu trung tính: {pixel_info['midtone_cast']}\n"
         f"- Tỷ lệ điểm ảnh rực màu cực đại (Saturation >= 78%): {pixel_info['vivid_sat_pct']}% | Cháy kênh màu đơn lẻ: {pixel_info['channel_clip_pct']}%\n"
-        f"- Nhận xét đo màu tự động: {color_summary_lines}\n"
+        f"- Nhận xét đo màu & vector tự động: {color_summary_lines}\n"
         f"- Chỉ số bất đồng nhất mức nén vùng ELA: {tech_info.ela_regional_inconsistency} (thang 0..1)\n\n"
         "YÊU CẦU GIÁM ĐỊNH CHÍNH XÁC:\n"
         "- Bước 1: Nếu có người trong ảnh, đối chiếu ngay trên HÌNH 2 xem MÀU DA và ĐỘ MỊN / ĐỘ HẠT của KHUÔN MẶT có bị lệch tông hoặc khác kết cấu so với DA CỔ (sát cổ áo) và DA BÀN TAY không. Nếu lệch -> kết luận ngay `FACE_SWAP_OR_DEEPFAKE`!\n"
-        "- Bước 2: Kiểm tra xem đây có phải ảnh chân dung/cảnh vật do AI tạo sinh (chữ lạ vô nghĩa trên áo như `--C21`, mất bàn chân/chiếc dép phía sau trong bọt nước, kính/phụ kiện méo, bề mặt da sáp khuếch tán) hoặc POSTER DO AI TẠO SINH (logo mâu thuẫn tên đội/trường, chữ nhỏ/logo tài trợ nhòe biến dạng, cầu thủ trùng số áo, khán đài render AI) không. Nếu có -> kết luận ngay `AI_GENERATED`!\n"
-        "- Bước 3: Chỉ khi không có lỗi AI tạo sinh hay AI thay mặt mới xét đến `EDITED_OR_SPLICED`, `EDITED_COLOR_OR_RETOUCH` hoặc `AUTHENTIC_LIKELY`."
+        "- Bước 2: Phân biệt rõ ẤN PHẨM THIẾT KẾ BẰNG ỨNG DỤNG ĐỒ HỌA (`SCREENSHOT_OR_MEME` — Canva, Photoshop, Illustrator, Figma: font chữ vector đồng nhất sắc nét, dấu tiếng Việt chuẩn 100%, logo khớp tên đơn vị, nền phẳng/gradient toán học) với ẢNH / POSTER DO AI TẠO SINH (`AI_GENERATED` — chữ vô nghĩa `--C21`, logo mâu thuẫn tên đội/trường, chữ nhỏ biến dạng, cầu thủ trùng số áo, mất bàn chân/chiếc dép sau, bề mặt da/khán đài khuếch tán AI).\n"
+        "- Bước 3: Thẩm định xem chữ viết/thông tin trên ảnh có ĐỦ ĐIỀU KIỆN XÁC MINH SỰ THẬT CÔNG KHAI (tin tức, cảnh báo Bộ Công an/Chính phủ/tingia.gov.vn, số liệu, phát ngôn, khoa học) hay không để trích xuất vào `in_image_factual_claims` và ghi nhận xét vào `claim_verifiability_note_vi`."
     )
 
     api_img_bytes = (
@@ -1182,13 +1280,17 @@ async def run_image_verification_pipeline(
         ]
 
         if tech_info.software_traces:
-            sw_msg = f"Phát hiện dấu vết phần mềm chỉnh sửa / chỉnh màu trong tệp: {', '.join(tech_info.software_traces)}."
+            sw_msg = f"Phát hiện dấu vết phần mềm thiết kế / chỉnh sửa trong tệp: {', '.join(tech_info.software_traces)}."
             if sw_msg not in signals:
                 signals.insert(0, sw_msg)
         if tech_info.c2pa_or_ai_watermark:
             ai_msg = f"Phát hiện chữ ký chứng thực C2PA / công cụ AI trong tệp: {tech_info.c2pa_or_ai_watermark}."
             if ai_msg not in signals:
                 signals.insert(0, ai_msg)
+        if vision_out.claim_verifiability_note_vi:
+            verif_msg = f"Thẩm định điều kiện xác minh thông tin trên ảnh: {vision_out.claim_verifiability_note_vi.strip()}"
+            if verif_msg not in signals:
+                signals.append(verif_msg)
 
         final_face_risk = (
             0.0
