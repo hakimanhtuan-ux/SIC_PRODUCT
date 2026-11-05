@@ -108,15 +108,80 @@ export interface PrivacyScanInfo {
   ocr_required_pages: number[];
 }
 
+export type ImageAuthenticityType =
+  | "AUTHENTIC_LIKELY"
+  | "EDITED_COLOR_OR_RETOUCH"
+  | "EDITED_OR_SPLICED"
+  | "FACE_SWAP_OR_DEEPFAKE"
+  | "AI_GENERATED"
+  | "SCREENSHOT_OR_MEME"
+  | "INCONCLUSIVE_LOW_QUALITY";
+
+export interface ForensicRegionBox {
+  region_id: string;
+  label_vi: string;
+  category:
+    | "FACE_ANOMALY"
+    | "SPLICING"
+    | "LIGHTING"
+    | "AI_ARTIFACT"
+    | "EDITED_TEXT"
+    | string;
+  severity: "LOW" | "MEDIUM" | "HIGH" | string;
+  confidence: number;
+  box_2d: [number, number, number, number] | number[];
+  explanation_vi: string;
+}
+
+export interface ImageOriginProbabilityBreakdown {
+  authentic_pct: number;
+  edited_spliced_pct: number;
+  face_swap_deepfake_pct: number;
+  ai_generated_pct: number;
+}
+
+export interface TechnicalForensicsInfo {
+  format: string;
+  width: number;
+  height: number;
+  file_size_kb: number;
+  has_exif: boolean;
+  camera_info?: string | null;
+  software_traces: string[];
+  c2pa_or_ai_watermark?: string | null;
+  ela_mean_error: number;
+  ela_regional_inconsistency: number;
+  ela_heatmap_data_url?: string | null;
+  preview_data_url?: string | null;
+}
+
+export interface ImageForensicsReport {
+  authenticity_verdict: ImageAuthenticityType;
+  authenticity_label_vi: string;
+  tamper_confidence_pct: number;
+  faces_detected: number;
+  face_swap_risk_pct: number;
+  face_analysis_vi: string;
+  lighting_and_blend_vi: string;
+  summary_explanation_vi: string;
+  origin_probabilities: ImageOriginProbabilityBreakdown;
+  suspicious_regions: ForensicRegionBox[];
+  forensic_signals: string[];
+  extracted_ocr_text: string;
+  limitations_vi: string;
+  technical: TechnicalForensicsInfo;
+}
+
 export interface VerificationResponse {
   request_id: string;
   document_id: string;
-  source_type: "TEXT" | "DOCUMENT" | "URL" | string;
+  source_type: "TEXT" | "DOCUMENT" | "URL" | "IMAGE" | string;
   source_title: string;
   source_url?: string | null;
   full_text: string;
   segments: DocumentSegment[];
   claims: ClaimVerificationResult[];
+  image_forensics?: ImageForensicsReport | null;
   manipulation_signals: ManipulationSignal[];
   manipulation_summary: string;
   privacy_scan: PrivacyScanInfo;

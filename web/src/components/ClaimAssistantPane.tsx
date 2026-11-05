@@ -59,6 +59,17 @@ export function ClaimAssistantPane({
   const completenessPct = Math.round(claim.evidence_completeness * 100);
   const vMeta = VERDICT_META[claim.verdict] || VERDICT_META.INSUFFICIENT_EVIDENCE;
 
+  const suppCount = claim.supporting_evidence.length;
+  const refCount = claim.refuting_evidence.length;
+  const ctxCount = claim.contextual_evidence.length;
+  const totalClaimEv = suppCount + refCount + ctxCount;
+  const suppPct = totalClaimEv > 0 ? Math.round((suppCount / totalClaimEv) * 100) : 0;
+  const refPct = totalClaimEv > 0 ? Math.round((refCount / totalClaimEv) * 100) : 0;
+  const ctxPct = totalClaimEv > 0 ? Math.max(0, 100 - suppPct - refPct) : 0;
+  const ringR = 22;
+  const ringCirc = 2 * Math.PI * ringR;
+  const ringOffset = ringCirc * (1 - Math.min(1, Math.max(0, claim.evidence_completeness)));
+
   return (
     <div className="space-y-5">
       {/* Metadata Pills */}
@@ -95,19 +106,56 @@ export function ClaimAssistantPane({
           {claim.explanation}
         </p>
 
-        <div>
-          <div className="flex items-center justify-between text-xs text-slate-700 mb-1.5">
-            <span className="font-semibold">Mức độ đầy đủ của bằng chứng</span>
-            <span className="font-extrabold text-slate-900">{completenessPct}%</span>
+        <div className="flex items-center gap-3.5 bg-white/85 rounded-xl p-3 border border-white">
+          <div className="relative h-14 w-14 shrink-0">
+            <svg className="h-14 w-14 -rotate-90" viewBox="0 0 56 56">
+              <circle
+                cx="28"
+                cy="28"
+                r={ringR}
+                fill="none"
+                stroke="#e2e8f0"
+                strokeWidth="6"
+              />
+              <circle
+                cx="28"
+                cy="28"
+                r={ringR}
+                fill="none"
+                stroke={vMeta.accentColor}
+                strokeWidth="6"
+                strokeLinecap="round"
+                strokeDasharray={ringCirc}
+                strokeDashoffset={ringOffset}
+              />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center text-xs font-extrabold text-slate-900">
+              {completenessPct}%
+            </div>
           </div>
-          <div className="h-2.5 w-full rounded-full bg-white/80 border border-slate-200/80 overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-300"
-              style={{
-                width: `${Math.max(8, completenessPct)}%`,
-                backgroundColor: vMeta.accentColor,
-              }}
-            />
+
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <div className="flex items-center justify-between text-xs text-slate-700">
+              <span className="font-bold">Độ đầy đủ bằng chứng</span>
+              <span className="font-extrabold text-slate-900">{completenessPct}%</span>
+            </div>
+            {totalClaimEv > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
+                <span className="rounded-md bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-emerald-800">
+                  Ủng hộ: {suppPct}%
+                </span>
+                <span className="rounded-md bg-rose-50 border border-rose-200 px-1.5 py-0.5 text-rose-800">
+                  Bác bỏ: {refPct}%
+                </span>
+                <span className="rounded-md bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-indigo-800">
+                  Ngữ cảnh: {ctxPct}%
+                </span>
+              </div>
+            ) : (
+              <p className="text-[11px] text-slate-500">
+                Mệnh đề thuộc nhóm nhận định / không áp dụng tỷ lệ nguồn tra cứu.
+              </p>
+            )}
           </div>
         </div>
       </div>

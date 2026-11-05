@@ -1,22 +1,17 @@
 @echo off
-title TrueCheck AI - Web Studio
-set "PATH=%PATH%;C:\Program Files\nodejs;%APPDATA%\npm"
+title TrueCheck AI - Web Studio (Port 3000)
+set "PATH=C:\Program Files\nodejs;%APPDATA%\npm;%PATH%"
 cd /d "%~dp0web"
 
 echo ===================================================
-echo   TRUECHECK AI - KHOI DONG WEB STUDIO (PORT 3000)
+echo   TRUECHECK AI - KHOI DONG WEB STUDIO (:3000)
 echo ===================================================
 
-echo [1/2] Kiem tra va cai dat dependencies (npm install)...
-call npm install
-if errorlevel 1 (
-    echo [LOI] Khong the chay npm. Hay chac chan ban da cai Node.js LTS!
-    pause
-    exit /b 1
+if not exist "node_modules\next" (
+    echo [1/2] Dang cai dat thu vien lan dau ^(npm install^)...
+    call npm install
 )
 
-echo [2/2] Khoi dong Next.js tai http://localhost:3000 ...
-call npm run dev
-
+echo Khoi dong giao dien tai http://localhost:3000 ...
+node start-dev.js dev -p 3000
 pause
-

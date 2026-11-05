@@ -24,6 +24,7 @@ import {
 import { ClaimAssistantPane } from "./ClaimAssistantPane";
 import { ManipulationPanel } from "./ManipulationPanel";
 import { VERDICT_META, VerdictBadge } from "./VerdictBadge";
+import { VerificationCharts } from "./VerificationCharts";
 
 interface HighlightSpanGroup {
   start: number;
@@ -137,7 +138,7 @@ export function DocumentStudio({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `truecheck-corrected-draft-${data.document_id.slice(0, 8)}.txt`;
+    a.download = `factcheck-assistent-draft-${data.document_id.slice(0, 8)}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -295,6 +296,14 @@ export function DocumentStudio({
           </span>
         </div>
       </div>
+
+      {/* Interactive Pie & Donut Charts (%) */}
+      <VerificationCharts
+        data={data}
+        activeClaim={activeClaim}
+        filterVerdict={filterVerdict}
+        onSelectVerdictFilter={setFilterVerdict}
+      />
 
       {/* Filter & Export Action Bar */}
       <div className="tc-surface-card p-4 flex flex-wrap items-center justify-between gap-4">
@@ -473,7 +482,7 @@ export function DocumentStudio({
                   BÊN PHẢI • HỒ SƠ BẰNG CHỨNG
                 </div>
                 <div className="text-sm font-extrabold">
-                  TRUECHECK AI ASSISTANT
+                  FACTCHECK ASSISTENT
                 </div>
               </div>
             </div>

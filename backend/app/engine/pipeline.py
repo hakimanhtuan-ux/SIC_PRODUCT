@@ -10,11 +10,15 @@ from app.core.cache import cache_manager
 from app.core.config import settings
 from app.engine.gemini_client import gemini_client
 from app.engine.layer1_ingestion import IngestedDocument
-from app.engine.layer2_claim_extraction import ExtractedClaimCandidate, extract_claims
-from app.engine.layer3_evidence_retrieval import lookup_claim_memory, retrieve_evidence_for_claim
-from app.engine.layer4_evidence_evaluation import evaluate_and_validate_evidences
-from app.engine.layer5_verification import decide_verdict_and_explain
-from app.engine.layer6_explanation import analyze_manipulation_signals
+from app.engine.layer2_claim_extraction import (
+    ExtractedClaimCandidate,
+    extract_claims_and_manipulation,
+)
+from app.engine.layer3_evidence_retrieval import (
+    lookup_claim_memory_batch,
+    retrieve_evidence_for_claim,
+)
+from app.engine.layer5_verification import evaluate_and_decide_unified
 from app.models.entities import ClaimRecord, DocumentJob, EvidenceRecord
 from app.schemas.verification import (
     CLAIM_TYPE_LABELS_VI,
@@ -97,40 +101,40 @@ def _claim_record_to_result(
     )
 
 
-async def _verify_single_claim(
-    db: AsyncSession,
+async def _verify_uncached_claim_network(
     candidate: ExtractedClaimCandidate,
-    use_claim_memory: bool,
-) -> tuple[ClaimVerificationResult, bool]:
+    existing_embedding: Optional[list[float]],
+    sem: asyncio.Semaphore,
+) -> tuple[ClaimVerificationResult, bool, Optional[ClaimRecord]]:
     """
-    Runs Layers 3 -> 4 -> 5 for a single atomic claim and persists to Claim Memory.
-    Returns (ClaimVerificationResult, used_live_search).
+    Runs network-bound Layers 3 -> Unified 4+5+6 + Embedding in parallel under bounded concurrency,
+    returning a detached ClaimRecord ready for clean batch persistence on the main DB session.
     """
-    embedding: list[float] | None = None
-    if use_claim_memory and candidate.claim_type == ClaimTypeEnum.FACTUAL_CLAIM:
-        cached_rec, embedding = await lookup_claim_memory(db, candidate.normalized_claim)
-        if cached_rec is not None:
-            return _claim_record_to_result(cached_rec, candidate), True
-
-    raw_evidences, used_live_search = await retrieve_evidence_for_claim(candidate)
-    evaluated_evidences = await evaluate_and_validate_evidences(
-        candidate, raw_evidences, used_live_search=used_live_search
-    )
-    decision = await decide_verdict_and_explain(
-        candidate, evaluated_evidences, used_live_search=used_live_search
-    )
+    async with sem:
+        need_embed = (
+            candidate.claim_type == ClaimTypeEnum.FACTUAL_CLAIM
+            and existing_embedding is None
+        )
+        embed_task = (
+            asyncio.create_task(gemini_client.embed_text(candidate.normalized_claim))
+            if need_embed
+            else None
+        )
+        raw_evidences, used_live_search = await retrieve_evidence_for_claim(candidate)
+        evaluated_evidences, decision = await evaluate_and_decide_unified(
+            candidate, raw_evidences, used_live_search=used_live_search
+        )
+        embedding = await embed_task if embed_task is not None else existing_embedding
 
     supp = [e for e in evaluated_evidences if e.stance == EvidenceStanceEnum.SUPPORTING]
     ref = [e for e in evaluated_evidences if e.stance == EvidenceStanceEnum.REFUTING]
     ctx = [e for e in evaluated_evidences if e.stance == EvidenceStanceEnum.CONTEXTUAL]
 
     now = datetime.now(timezone.utc)
+    new_record: Optional[ClaimRecord] = None
 
-    # Persist into Versioned Claim Memory when factual & live search or explicit analysis ran
     if candidate.claim_type == ClaimTypeEnum.FACTUAL_CLAIM and used_live_search:
-        if embedding is None:
-            embedding = await gemini_client.embed_text(candidate.normalized_claim)
-        claim_rec = ClaimRecord(
+        new_record = ClaimRecord(
             normalized_claim=candidate.normalized_claim,
             claim_type=candidate.claim_type.value,
             topic_category=candidate.topic_category,
@@ -151,7 +155,7 @@ async def _verify_single_claim(
             expires_at=now + timedelta(days=settings.CLAIM_MEMORY_TTL_DAYS),
         )
         for ev in evaluated_evidences:
-            claim_rec.evidences.append(
+            new_record.evidences.append(
                 EvidenceRecord(
                     claim_version=1,
                     title=ev.title,
@@ -168,11 +172,6 @@ async def _verify_single_claim(
                     validation_note=ev.validation_note,
                 )
             )
-        db.add(claim_rec)
-        try:
-            await db.commit()
-        except Exception:
-            await db.rollback()
 
     result = ClaimVerificationResult(
         claim_id=candidate.claim_id,
@@ -199,7 +198,7 @@ async def _verify_single_claim(
         memory_version=1,
         verified_at=now.isoformat(),
     )
-    return result, used_live_search
+    return result, used_live_search, new_record
 
 
 async def run_verification_pipeline(
@@ -210,37 +209,75 @@ async def run_verification_pipeline(
     saved_file_path: Optional[str] = None,
 ) -> VerificationResponse:
     """
-    Master 6-Layer TrueCheck AI Pipeline:
-    Layer 1 (IngestedDocument) -> Layer 2 (Claim Extraction) ->
-    Layer 3 (Claim Memory & Retrieval) -> Layer 4 (Citation Validation) ->
-    Layer 5 (6-State Decision) -> Layer 6 (Explanation & Manipulation Signals).
+    Turbo 6-Layer TrueCheck AI Pipeline:
+    - Instant (<1ms) Layer 2 fast-path for single-claim texts or 1 combined LLM call for multi-claim docs
+    - Fast 2-stage Claim Memory lookup
+    - Parallel Evidence Retrieval + Unified Layer 4/5/6 Citation Validation & 6-State Verdict across claims
     """
     started = time.perf_counter()
     now_iso = datetime.now(timezone.utc).isoformat()
     doc_id = existing_job_id or str(uuid.uuid4())
 
-    # Short-TTL exact text cache in Redis for rapid repeated Extension highlights
+    # Short-TTL exact text cache in Redis/Memory for rapid repeated highlights
     cache_key = None
     if doc.source_type == "TEXT" and use_claim_memory and len(doc.full_text) <= 1500:
         digest = hashlib.sha256(doc.full_text.encode("utf-8")).hexdigest()[:24]
-        cache_key = f"truecheck:v1:text:{digest}"
+        cache_key = f"truecheck:v2:text:{digest}"
         cached_payload = await cache_manager.get_json(cache_key)
         if cached_payload:
-            return VerificationResponse.model_validate(cached_payload)
+            cached_resp = VerificationResponse.model_validate(cached_payload)
+            cached_resp.processing_time_ms = max(
+                1, int((time.perf_counter() - started) * 1000)
+            )
+            return cached_resp
 
-    # Layer 2 & Layer 6 Manipulation Scan in parallel
-    candidates_task = asyncio.create_task(extract_claims(doc))
-    manip_task = asyncio.create_task(analyze_manipulation_signals(doc.full_text))
-    candidates, (manip_signals, manip_summary) = await asyncio.gather(candidates_task, manip_task)
+    # Layer 2 + Independent Manipulation Analysis (0ms fast-path for single sentence, or 1 combined LLM call)
+    candidates, manip_signals, manip_summary = await extract_claims_and_manipulation(doc)
 
-    # Process claims sequentially or in bounded concurrency (protects DB session & API rate limits)
-    claim_results: List[ClaimVerificationResult] = []
+    # Stage 1: Batch DB + Batch Embedding Claim Memory check (~1-350ms total instead of N sequential calls)
+    indexed_results: Dict[int, ClaimVerificationResult] = {}
+    pending_items: List[tuple[int, ExtractedClaimCandidate, Optional[list[float]]]] = []
     any_live_search = False
-    for cand in candidates:
-        c_res, live_used = await _verify_single_claim(db, cand, use_claim_memory=use_claim_memory)
-        claim_results.append(c_res)
-        if live_used:
-            any_live_search = True
+
+    if use_claim_memory:
+        factual_indices = [
+            i for i, c in enumerate(candidates) if c.claim_type == ClaimTypeEnum.FACTUAL_CLAIM
+        ]
+        factual_texts = [candidates[i].normalized_claim for i in factual_indices]
+        batch_mem = await lookup_claim_memory_batch(db, factual_texts) if factual_texts else []
+        mem_by_idx = dict(zip(factual_indices, batch_mem))
+
+        for idx, cand in enumerate(candidates):
+            if idx in mem_by_idx:
+                cached_rec, emb = mem_by_idx[idx]
+                if cached_rec is not None:
+                    indexed_results[idx] = _claim_record_to_result(cached_rec, cand)
+                    any_live_search = True
+                    continue
+                pending_items.append((idx, cand, emb))
+            else:
+                pending_items.append((idx, cand, None))
+    else:
+        for idx, cand in enumerate(candidates):
+            pending_items.append((idx, cand, None))
+
+    # Stage 2: Parallel Network Verification across uncached claims (up to 6 concurrent claims)
+    new_records_to_save: List[ClaimRecord] = []
+    if pending_items:
+        sem = asyncio.Semaphore(6)
+        tasks = [
+            _verify_uncached_claim_network(cand, emb, sem)
+            for _, cand, emb in pending_items
+        ]
+        verified_tuples = await asyncio.gather(*tasks)
+        for (orig_idx, _, _), (c_res, live_used, new_rec) in zip(pending_items, verified_tuples):
+            indexed_results[orig_idx] = c_res
+            if live_used:
+                any_live_search = True
+            if new_rec is not None:
+                new_records_to_save.append(new_rec)
+
+    claim_results = [indexed_results[i] for i in range(len(candidates))]
 
     counts: Dict[str, int] = {v.value: 0 for v in VerdictEnum}
     for cr in claim_results:
@@ -280,7 +317,10 @@ async def run_verification_pipeline(
         verified_at=now_iso,
     )
 
-    # Save or update DocumentJob for Report / Annotated PDF exporting
+    # Batch persist ClaimRecords + DocumentJob in one clean DB commit
+    for rec in new_records_to_save:
+        db.add(rec)
+
     now_dt = datetime.now(timezone.utc)
     retention_dt = now_dt + timedelta(hours=settings.DOCUMENT_RETENTION_HOURS)
     existing_job = await db.get(DocumentJob, doc_id)
@@ -312,4 +352,3 @@ async def run_verification_pipeline(
         await cache_manager.set_json(cache_key, response.model_dump(), ttl_seconds=900)
 
     return response
-

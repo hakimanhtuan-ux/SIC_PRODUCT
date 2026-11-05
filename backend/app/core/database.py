@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import AsyncGenerator
 from sqlalchemy import text
@@ -36,10 +37,19 @@ async def init_db() -> None:
     db_url = settings.DATABASE_URL
     if db_url.startswith("postgresql"):
         try:
-            pg_engine = create_async_engine(db_url, echo=False, pool_pre_ping=True)
-            async with pg_engine.begin() as conn:
-                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-                await conn.run_sync(Base.metadata.create_all)
+            pg_engine = create_async_engine(
+                db_url,
+                echo=False,
+                pool_pre_ping=True,
+                connect_args={"timeout": 1.5},
+            )
+
+            async def _init_pg() -> None:
+                async with pg_engine.begin() as conn:
+                    await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                    await conn.run_sync(Base.metadata.create_all)
+
+            await asyncio.wait_for(_init_pg(), timeout=2.0)
             _engine = pg_engine
             _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
             _using_postgres = True

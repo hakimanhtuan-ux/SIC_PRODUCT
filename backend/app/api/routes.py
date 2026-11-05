@@ -8,6 +8,7 @@ from app.core.cache import cache_manager
 from app.core.config import settings
 from app.core.database import get_db, is_postgres_active
 from app.engine.exporter import generate_annotated_pdf, generate_markdown_report
+from app.engine.image_forensics import run_image_verification_pipeline
 from app.engine.layer1_ingestion import ingest_file_bytes, ingest_plain_text, ingest_url
 from app.engine.pipeline import run_verification_pipeline
 from app.models.entities import ClaimRecord, DocumentJob, FeedbackReport
@@ -24,6 +25,15 @@ from app.schemas.verification import (
 router = APIRouter(prefix="/api/v1", tags=["TrueCheck Verification API"])
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md"}
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".heic", ".heif"}
+CONTENT_TYPE_TO_IMAGE_EXT = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/bmp": ".bmp",
+    "image/heic": ".heic",
+    "image/heif": ".heif",
+}
 
 
 @router.get("/health")
@@ -168,6 +178,55 @@ async def verify_document_endpoint(
         saved_file_path=str(saved_path),
     )
     return result
+
+
+@router.post("/verify/image", response_model=VerificationResponse)
+async def verify_image_endpoint(
+    file: UploadFile = File(...),
+    context_caption: str = Form(""),
+    redact_pii: bool = Form(False),
+    use_claim_memory: bool = Form(True),
+    db: AsyncSession = Depends(get_db),
+):
+    filename = file.filename or "clipboard-image.png"
+    ext = Path(filename).suffix.lower()
+    if not ext and file.content_type in CONTENT_TYPE_TO_IMAGE_EXT:
+        ext = CONTENT_TYPE_TO_IMAGE_EXT[file.content_type]
+        filename = f"{filename}{ext}"
+
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Định dạng ảnh '{ext or file.content_type}' chưa được hỗ trợ. "
+                "Vui lòng tải lên JPG, PNG, WEBP, BMP hoặc HEIC."
+            ),
+        )
+
+    file_bytes = await file.read()
+    max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    if len(file_bytes) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Ảnh vượt quá dung lượng tối đa {settings.MAX_UPLOAD_SIZE_MB}MB.",
+        )
+    if len(file_bytes) < 32:
+        raise HTTPException(status_code=400, detail="Tệp hình ảnh tải lên không hợp lệ hoặc bị trống.")
+
+    uploads_dir = settings.STORAGE_DIR / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    saved_path = uploads_dir / f"{uuid.uuid4()}{ext}"
+    saved_path.write_bytes(file_bytes)
+
+    return await run_image_verification_pipeline(
+        db=db,
+        image_bytes=file_bytes,
+        filename=filename,
+        context_caption=context_caption,
+        redact_pii=redact_pii,
+        use_claim_memory=use_claim_memory,
+        saved_file_path=str(saved_path),
+    )
 
 
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse)

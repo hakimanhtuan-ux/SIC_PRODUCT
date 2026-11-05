@@ -336,11 +336,21 @@
     }
 
     const vStyle = VERDICT_UI[claim.verdict] || VERDICT_UI.INSUFFICIENT_EVIDENCE;
-    const allSources = [
-      ...(claim.supporting_evidence || []),
-      ...(claim.refuting_evidence || []),
-      ...(claim.contextual_evidence || []),
-    ].slice(0, 4);
+    const allSupp = claim.supporting_evidence || [];
+    const allRef = claim.refuting_evidence || [];
+    const allCtx = claim.contextual_evidence || [];
+    const totalEv = allSupp.length + allRef.length + allCtx.length;
+    const suppPct = totalEv > 0 ? Math.round((allSupp.length / totalEv) * 100) : 0;
+    const refPct = totalEv > 0 ? Math.round((allRef.length / totalEv) * 100) : 0;
+    const ctxPct = totalEv > 0 ? Math.max(0, 100 - suppPct - refPct) : 0;
+    const compPct = Math.round((claim.evidence_completeness || 0) * 100);
+    const pieGradient =
+      totalEv > 0
+        ? `conic-gradient(#059669 0% ${suppPct}%, #dc2626 ${suppPct}% ${suppPct + refPct
+        }%, #6366f1 ${suppPct + refPct}% 100%)`
+        : "#e2e8f0";
+    const elapsedSec = ((payload.processing_time_ms || 0) / 1000).toFixed(2);
+    const allSources = [...allSupp, ...allRef, ...allCtx].slice(0, 4);
 
     const missingHtml =
       claim.missing_information && claim.missing_information.length > 0
@@ -360,8 +370,8 @@
           <div class="tc-manip-box">
             <b>Tín hiệu ngôn từ (Độc lập dữ kiện):</b>
             ${payload.manipulation_signals
-              .map((s) => escapeHtml(s.label_vi))
-              .join(", ")}
+          .map((s) => escapeHtml(s.label_vi))
+          .join(", ")}
           </div>
         `
         : "";
@@ -369,22 +379,21 @@
     const sourcesHtml =
       allSources.length > 0
         ? allSources
-            .map(
-              (ev) => `
+          .map(
+            (ev) => `
               <div class="tc-source-item">
                 <a href="${escapeHtml(ev.url)}" target="_blank" rel="noopener noreferrer">
                   <span class="tc-tier-pill">Cấp ${escapeHtml(ev.tier)}</span>
                   ${escapeHtml(ev.title)}
                 </a>
                 <div style="color:#475569; font-size:11px;">
-                  ${escapeHtml(ev.domain)} • ${
-                    ev.citation_validated ? "✓ Đã xác thực trích dẫn" : "Đối chiếu ngữ cảnh"
-                  }
+                  ${escapeHtml(ev.domain)} • ${ev.citation_validated ? "✓ Đã xác thực trích dẫn" : "Đối chiếu ngữ cảnh"
+              }
                 </div>
               </div>
             `
-            )
-            .join("")
+          )
+          .join("")
         : `<div style="font-size:12px; color:#64748b;">Chưa tìm thấy nguồn trực tiếp công khai.</div>`;
 
     const studioDeepLink = `${(webAppUrl || "http://localhost:3000").replace(
@@ -402,11 +411,26 @@
         <button class="tc-close" title="Đóng">✕</button>
       </div>
       <div class="tc-body">
-        <div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
           <span class="tc-verdict-badge" style="background:${vStyle.bg}; border-color:${vStyle.border}; color:${vStyle.color};">
             <span>${vStyle.icon}</span>
             <span>${escapeHtml(vStyle.label)}</span>
           </span>
+          <span style="font-size:11px; font-weight:700; color:#64748b;">⚡ ${elapsedSec}s</span>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:9px 11px;">
+          <div style="width:46px; height:46px; border-radius:50%; background:${pieGradient}; flex-shrink:0; display:flex; align-items:center; justify-content:center;">
+            <div style="width:24px; height:24px; border-radius:50%; background:#ffffff; font-size:9.5px; font-weight:800; color:#0f172a; display:flex; align-items:center; justify-content:center;">
+              ${compPct}%
+            </div>
+          </div>
+          <div style="font-size:11.5px; line-height:1.45; flex:1;">
+            <div style="font-weight:700; color:#0f172a;">Tương quan nguồn (%) • Độ đầy đủ ${compPct}%</div>
+            <div style="color:#475569; margin-top:2px;">
+              🟢 Ủng hộ <b>${suppPct}%</b> • 🔴 Bác bỏ <b>${refPct}%</b> • 🟣 Ngữ cảnh <b>${ctxPct}%</b>
+            </div>
+          </div>
         </div>
 
         <div>

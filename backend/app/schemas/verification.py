@@ -162,16 +162,111 @@ class PrivacyScanInfo(BaseModel):
     ocr_required_pages: List[int] = Field(default_factory=list)
 
 
+class ImageAuthenticityEnum(str, Enum):
+    AUTHENTIC_LIKELY = "AUTHENTIC_LIKELY"
+    EDITED_COLOR_OR_RETOUCH = "EDITED_COLOR_OR_RETOUCH"
+    EDITED_OR_SPLICED = "EDITED_OR_SPLICED"
+    FACE_SWAP_OR_DEEPFAKE = "FACE_SWAP_OR_DEEPFAKE"
+    AI_GENERATED = "AI_GENERATED"
+    SCREENSHOT_OR_MEME = "SCREENSHOT_OR_MEME"
+    INCONCLUSIVE_LOW_QUALITY = "INCONCLUSIVE_LOW_QUALITY"
+
+
+IMAGE_AUTHENTICITY_LABELS_VI: Dict[ImageAuthenticityEnum, str] = {
+    ImageAuthenticityEnum.AUTHENTIC_LIKELY: "Ảnh Thật / Nguyên bản (Chưa phát hiện dấu hiệu giả mạo hay chỉnh sửa)",
+    ImageAuthenticityEnum.EDITED_COLOR_OR_RETOUCH: "Ảnh Chụp Thật — Đã qua chỉnh màu / bộ lọc hậu kỳ",
+    ImageAuthenticityEnum.EDITED_OR_SPLICED: "Không nguyên bản — Ảnh đã qua cắt ghép / chỉnh sửa chi tiết",
+    ImageAuthenticityEnum.FACE_SWAP_OR_DEEPFAKE: "Cảnh báo Giả mạo — Ảnh thay / ghép khuôn mặt bằng AI (Deepfake)",
+    ImageAuthenticityEnum.AI_GENERATED: "Không phải ảnh thật — Ảnh / Ấn phẩm do AI tạo sinh (GenAI)",
+    ImageAuthenticityEnum.SCREENSHOT_OR_MEME: "Ảnh chụp màn hình / Thiết kế đồ họa (Không phải ảnh chụp gốc)",
+    ImageAuthenticityEnum.INCONCLUSIVE_LOW_QUALITY: "Ảnh mờ vỡ / Nén nhiều lần — Chưa đủ chi tiết kết luận",
+}
+
+
+class ForensicRegionBox(BaseModel):
+    region_id: str
+    label_vi: str = Field(description="Tên vùng nghi vấn, ví dụ: Khuôn mặt trung tâm, Vùng biển báo bị ghép...")
+    category: str = Field(
+        default="FACE_ANOMALY",
+        description="FACE_ANOMALY | SPLICING | LIGHTING | AI_ARTIFACT | EDITED_TEXT",
+    )
+    severity: str = Field(default="MEDIUM", description="LOW | MEDIUM | HIGH")
+    confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+    box_2d: List[int] = Field(
+        default_factory=lambda: [0, 0, 1000, 1000],
+        description="[ymin, xmin, ymax, xmax] chuẩn hóa trên thang 0-1000",
+    )
+    explanation_vi: str = Field(description="Giải thích chi tiết dấu hiệu bất thường tại vùng này")
+
+
+class ImageOriginProbabilityBreakdown(BaseModel):
+    authentic_pct: float = Field(default=25.0, ge=0.0, le=100.0, description="% Khả năng ảnh gốc tự nhiên")
+    edited_spliced_pct: float = Field(default=25.0, ge=0.0, le=100.0, description="% Khả năng cắt ghép / chỉnh sửa hậu kỳ")
+    face_swap_deepfake_pct: float = Field(default=25.0, ge=0.0, le=100.0, description="% Khả năng ghép giả khuôn mặt / Deepfake")
+    ai_generated_pct: float = Field(default=25.0, ge=0.0, le=100.0, description="% Khả năng tạo sinh hoàn toàn bằng AI")
+
+
+class TechnicalForensicsInfo(BaseModel):
+    format: str = "JPEG"
+    width: int = 0
+    height: int = 0
+    file_size_kb: float = 0.0
+    has_exif: bool = False
+    camera_info: Optional[str] = None
+    software_traces: List[str] = Field(default_factory=list)
+    c2pa_or_ai_watermark: Optional[str] = None
+    ela_mean_error: float = 0.0
+    ela_regional_inconsistency: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Độ lệch chuẩn mức nén ELA giữa các vùng (cao gợi ý vùng ảnh ghép mới)",
+    )
+    ela_heatmap_data_url: Optional[str] = None
+    preview_data_url: Optional[str] = None
+
+
+class ImageForensicsReport(BaseModel):
+    authenticity_verdict: ImageAuthenticityEnum
+    authenticity_label_vi: str
+    tamper_confidence_pct: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=100.0,
+        description="Mức độ rõ ràng của bằng chứng kỹ thuật (0-100%)",
+    )
+    faces_detected: int = 0
+    face_swap_risk_pct: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=100.0,
+        description="Mức độ rủi ro ghép giả khuôn mặt / Deepfake (0-100%)",
+    )
+    face_analysis_vi: str = ""
+    lighting_and_blend_vi: str = ""
+    summary_explanation_vi: str = ""
+    origin_probabilities: ImageOriginProbabilityBreakdown
+    suspicious_regions: List[ForensicRegionBox] = Field(default_factory=list)
+    forensic_signals: List[str] = Field(default_factory=list)
+    extracted_ocr_text: str = ""
+    limitations_vi: str = (
+        "Phân tích giám định ảnh số kết hợp ELA, siêu dữ liệu EXIF/C2PA và thị giác đa phương thức AI. "
+        "Ảnh bị nén lại qua mạng xã hội (Facebook, Zalo) có thể làm mờ dấu vết EXIF gốc."
+    )
+    technical: TechnicalForensicsInfo
+
+
 class VerificationResponse(BaseModel):
     request_id: str
     document_id: str
-    source_type: str = Field(description="TEXT | DOCUMENT | URL")
+    source_type: str = Field(description="TEXT | DOCUMENT | URL | IMAGE")
     source_title: str = "Văn bản kiểm chứng"
     source_url: Optional[str] = None
 
     full_text: str
     segments: List[DocumentSegment] = Field(default_factory=list)
     claims: List[ClaimVerificationResult] = Field(default_factory=list)
+    image_forensics: Optional[ImageForensicsReport] = None
 
     # Manipulation Analysis Engine (kept strictly independent from Fact Accuracy per Phần V)
     manipulation_signals: List[ManipulationSignal] = Field(default_factory=list)

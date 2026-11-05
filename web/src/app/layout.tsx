@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TrueCheck AI – Kiểm chứng tại điểm chạm, tin tưởng dựa trên bằng chứng",
+  title: "FactCheck Assistent – Kiểm chứng tại điểm chạm, tin tưởng dựa trên bằng chứng",
   description:
-    "Nền tảng kiểm chứng thông tin dựa trên bằng chứng (Evidence-Based AI Verification) dành cho văn bản, tài liệu PDF/DOCX và URL tiếng Việt.",
+    "Nền tảng kiểm chứng thông tin & giám định hình ảnh dựa trên bằng chứng (Evidence-Based FactCheck Assistent).",
 };
 
 export default function RootLayout({

@@ -11,14 +11,14 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 
 def free_port_8000() -> None:
-    """Frees port 8000 if a previous stale uvicorn process is still holding it."""
+    """Frees port 8000 across both IPv4 and IPv6 if a stale process is holding it."""
     try:
         out = subprocess.check_output(
-            ["netstat", "-ano", "-p", "tcp"], text=True, stderr=subprocess.DEVNULL
+            ["netstat", "-ano"], text=True, stderr=subprocess.DEVNULL
         )
         my_pid = os.getpid()
         for line in out.splitlines():
-            if ":8000" in line and "LISTENING" in line:
+            if ":8000 " in line and "LISTENING" in line:
                 parts = re.split(r"\s+", line.strip())
                 pid = int(parts[-1])
                 if pid != my_pid and pid > 0:
@@ -33,5 +33,4 @@ def free_port_8000() -> None:
 
 if __name__ == "__main__":
     free_port_8000()
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=False)
-
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=False)

@@ -5,21 +5,55 @@ import {
   VerificationResponse,
 } from "@/types/verification";
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const EXPLICIT_API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "";
+
+/**
+ * Smart multi-path fetch:
+ * 1. Uses same-origin `/api/v1/...` via Next.js rewrite proxy first (eliminates CORS & IPv6/IPv4 localhost issues).
+ * 2. Automatically falls back to `http://127.0.0.1:8000` and `http://localhost:8000` if needed.
+ */
+async function apiFetch(endpoint: string, init?: RequestInit): Promise<Response> {
+  const candidates = EXPLICIT_API_URL
+    ? [EXPLICIT_API_URL, "", "http://127.0.0.1:8000"]
+    : ["", "http://127.0.0.1:8000", "http://localhost:8000"];
+
+  let lastErr: unknown = null;
+  for (const base of candidates) {
+    try {
+      const res = await fetch(`${base}${endpoint}`, init);
+      // If Next.js proxy returned 502/504 because it couldn't reach upstream, try direct fallback
+      if ((res.status === 502 || res.status === 504) && base === "") {
+        continue;
+      }
+      return res;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  throw new Error(
+    lastErr instanceof Error && lastErr.message && lastErr.message !== "Failed to fetch"
+      ? lastErr.message
+      : "Không thể kết nối tới máy chủ kiểm chứng AI (cổng 8000). Vui lòng đợi vài giây hoặc chạy lại run_all.bat."
+  );
+}
 
 async function parseApiError(res: Response): Promise<string> {
   try {
     const data = await res.json();
-    return data.detail || `Lỗi máy chủ (${res.status})`;
+    if (typeof data?.detail === "string") return data.detail;
+    if (Array.isArray(data?.detail)) {
+      return data.detail.map((d: { msg?: string }) => d.msg || "").join("; ") || `Lỗi dữ liệu (${res.status})`;
+    }
+    return `Lỗi máy chủ (${res.status})`;
   } catch {
-    return `Không thể kết nối hoặc lỗi phản hồi (${res.status})`;
+    return `Không thể xử lý phản hồi từ máy chủ (mã ${res.status}).`;
   }
 }
 
 export async function fetchHealth(): Promise<HealthStatus | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/health`, {
+    const res = await apiFetch("/api/v1/health", {
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -36,7 +70,7 @@ export async function verifyText(params: {
   redact_pii?: boolean;
   use_claim_memory?: boolean;
 }): Promise<VerificationResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/verify/text`, {
+  const res = await apiFetch("/api/v1/verify/text", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
@@ -50,7 +84,7 @@ export async function verifyUrl(params: {
   redact_pii?: boolean;
   use_claim_memory?: boolean;
 }): Promise<VerificationResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/verify/url`, {
+  const res = await apiFetch("/api/v1/verify/url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
@@ -71,24 +105,39 @@ export async function verifyDocument(params: {
   form.append("use_claim_memory", String(params.use_claim_memory));
   form.append("async_mode", String(Boolean(params.async_mode)));
 
-  const res = await fetch(`${API_BASE_URL}/api/v1/verify/document`, {
+  const res = await apiFetch("/api/v1/verify/document", {
     method: "POST",
     body: form,
   });
   if (!res.ok) throw new Error(await parseApiError(res));
   const data = await res.json();
 
-  // If async Celery worker queued the job, poll until completion
   if (data.job_id && data.status && !data.claims) {
     return pollJobUntilComplete(data.job_id);
   }
   return data as VerificationResponse;
 }
 
+export async function verifyImage(params: {
+  file: File;
+  redact_pii: boolean;
+}): Promise<VerificationResponse> {
+  const form = new FormData();
+  form.append("file", params.file);
+  form.append("redact_pii", String(params.redact_pii));
+
+  const res = await apiFetch("/api/v1/verify/image", {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return (await res.json()) as VerificationResponse;
+}
+
 async function pollJobUntilComplete(jobId: string): Promise<VerificationResponse> {
   for (let i = 0; i < 60; i++) {
     await new Promise((r) => setTimeout(r, 2000));
-    const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${jobId}`);
+    const res = await apiFetch(`/api/v1/jobs/${jobId}`);
     if (!res.ok) throw new Error(await parseApiError(res));
     const job = await res.json();
     if (job.status === "COMPLETED" && job.result) {
@@ -102,7 +151,7 @@ async function pollJobUntilComplete(jobId: string): Promise<VerificationResponse
 }
 
 export async function fetchClaimMemory(): Promise<ClaimMemoryOverview> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/claims/memory?limit=25`, {
+  const res = await apiFetch("/api/v1/claims/memory?limit=25", {
     cache: "no-store",
   });
   if (!res.ok) throw new Error(await parseApiError(res));
@@ -110,7 +159,7 @@ export async function fetchClaimMemory(): Promise<ClaimMemoryOverview> {
 }
 
 export async function deleteDocumentSession(docId: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/documents/${docId}`, {
+  const res = await apiFetch(`/api/v1/documents/${docId}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error(await parseApiError(res));
@@ -124,7 +173,7 @@ export async function submitDisputeFeedback(params: {
   reason: string;
   evidence_url?: string;
 }): Promise<{ message: string }> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/feedback`, {
+  const res = await apiFetch("/api/v1/feedback", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
@@ -134,10 +183,9 @@ export async function submitDisputeFeedback(params: {
 }
 
 export function getReportExportUrl(docId: string): string {
-  return `${API_BASE_URL}/api/v1/documents/${docId}/export/report`;
+  return `${EXPLICIT_API_URL}/api/v1/documents/${docId}/export/report`;
 }
 
 export function getAnnotatedPdfExportUrl(docId: string): string {
-  return `${API_BASE_URL}/api/v1/documents/${docId}/export/annotated-pdf`;
+  return `${EXPLICIT_API_URL}/api/v1/documents/${docId}/export/annotated-pdf`;
 }
-

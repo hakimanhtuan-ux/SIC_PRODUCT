@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import time
@@ -10,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class CacheManager:
-    """Redis-backed cache with seamless in-memory fallback for standalone dev."""
+    """Redis-backed cache with instant (<0.3s) in-memory fallback for standalone dev."""
 
     def __init__(self) -> None:
         self._redis: aioredis.Redis | None = None
@@ -26,13 +27,14 @@ class CacheManager:
                 settings.REDIS_URL,
                 encoding="utf-8",
                 decode_responses=True,
-                socket_connect_timeout=1.5,
+                socket_connect_timeout=0.25,
+                socket_timeout=0.35,
             )
-            await client.ping()
+            await asyncio.wait_for(client.ping(), timeout=0.35)
             self._redis = client
             logger.info("Connected to Redis cache at %s", settings.REDIS_URL)
         except Exception as exc:
-            logger.warning("Redis unavailable (%s). Using in-memory cache fallback.", exc)
+            logger.warning("Redis unavailable (%s). Using fast in-memory cache.", exc)
             self._redis = None
         return self._redis
 

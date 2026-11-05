@@ -27,12 +27,13 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    PROJECT_NAME: str = "TrueCheck AI Verification Engine"
+    PROJECT_NAME: str = "FactCheck Assistent Verification Engine"
     VERSION: str = "0.1.0-mvp"
 
     # Gemini API (Google AI Studio Free Tier)
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-3.8-flash"
+    GEMINI_FAST_MODEL: str = "gemini-3.5-flash-lite"
     GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
     GEMINI_EMBEDDING_DIM: int = 768
 

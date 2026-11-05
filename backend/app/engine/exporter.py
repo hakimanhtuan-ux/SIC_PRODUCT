@@ -27,7 +27,7 @@ VERDICT_HEX: dict[VerdictEnum, str] = {
 def generate_markdown_report(res: VerificationResponse) -> str:
     """Generates a structured Vietnamese Verification Report in Markdown format."""
     lines: list[str] = [
-        "# BÁO CÁO KIỂM CHỨNG THÔNG TIN – TRUECHECK AI",
+        "# BÁO CÁO KIỂM CHỨNG THÔNG TIN – FACTCHECK ASSISTENT",
         "",
         f"- **Mã tài liệu:** `{res.document_id}`",
         f"- **Tiêu đề / Nguồn:** {res.source_title}",
@@ -37,11 +37,46 @@ def generate_markdown_report(res: VerificationResponse) -> str:
         "",
         "---",
         "",
+    ]
+
+    if res.image_forensics is not None:
+        img = res.image_forensics
+        probs = img.origin_probabilities
+        tech = img.technical
+        lines.extend([
+            "## 0. Giám định Kỹ thuật Số Hình ảnh & Khuôn mặt (Image Forensics & Deepfake)",
+            "",
+            f"- **Kết luận giám định ảnh:** **{img.authenticity_label_vi}** (`{img.authenticity_verdict.value}`)",
+            f"- **Độ rõ ràng bằng chứng kỹ thuật:** {img.tamper_confidence_pct}%",
+            f"- **Khuôn mặt phát hiện:** {img.faces_detected} khuôn mặt | **Rủi ro ghép giả khuôn mặt / Deepfake:** {img.face_swap_risk_pct}%",
+            f"- **Cơ cấu xác suất nguồn gốc (%):** Ảnh gốc tự nhiên `{probs.authentic_pct}%` | Chỉnh sửa / Cắt ghép `{probs.edited_spliced_pct}%` | Ghép giả khuôn mặt / Deepfake `{probs.face_swap_deepfake_pct}%` | Tạo sinh AI `{probs.ai_generated_pct}%`",
+            f"- **Thông số tệp & EXIF:** `{tech.format}` ({tech.width}x{tech.height}px, {tech.file_size_kb} KB) | EXIF gốc: `{'Có' if tech.has_exif else 'Không / Đã bị lược bỏ'}` | Thiết bị: `{tech.camera_info or 'Không ghi nhận'}`",
+            f"- **Dấu vết phần mềm / AI:** {', '.join(tech.software_traces) or 'Không phát hiện chữ ký phần mềm'} | C2PA / AI Watermark: {tech.c2pa_or_ai_watermark or 'Không phát hiện'}",
+            f"- **Phân tích sai số nén ELA:** Trung bình `{tech.ela_mean_error}` | Độ bất đồng nhất vùng `{int(tech.ela_regional_inconsistency * 100)}%`",
+            f"- **Giám định ranh giới khuôn mặt:** {img.face_analysis_vi}",
+            f"- **Giám định ánh sáng & cắt ghép:** {img.lighting_and_blend_vi}",
+            f"- **Tổng kết giám định:** {img.summary_explanation_vi}",
+        ])
+        if img.forensic_signals:
+            lines.append("- **Các dấu hiệu kỹ thuật chi tiết:**")
+            for sig_txt in img.forensic_signals:
+                lines.append(f"  - {sig_txt}")
+        if img.suspicious_regions:
+            lines.append("- **Các vùng khoanh khung kiểm tra:**")
+            for reg in img.suspicious_regions:
+                lines.append(
+                    f"  - `[{reg.region_id}]` **{reg.label_vi}** (Mức `{reg.severity}`, tọa độ `{reg.box_2d}`): {reg.explanation_vi}"
+                )
+        if img.extracted_ocr_text:
+            lines.append(f"- **Văn bản trích xuất trong ảnh (OCR):** \"{img.extracted_ocr_text}\"")
+        lines.extend(["", "---", ""])
+
+    lines.extend([
         "## 1. Tổng quan Kết quả Kiểm chứng Dữ kiện (Fact Accuracy)",
         "",
         "| Trạng thái kết luận | Số lượng mệnh đề |",
         "| :--- | :---: |",
-    ]
+    ])
 
     for verdict_key, count in res.summary_counts.items():
         lines.append(f"| `{verdict_key}` | {count} |")
@@ -91,13 +126,35 @@ def generate_markdown_report(res: VerificationResponse) -> str:
     lines.extend([
         "",
         "---",
-        "*Lưu ý nguyên tắc TrueCheck AI: Một mệnh đề 'Chưa đủ bằng chứng' không đồng nghĩa với thông tin sai. "
+        "*Lưu ý nguyên tắc FactCheck Assistent: Một mệnh đề 'Chưa đủ bằng chứng' không đồng nghĩa với thông tin sai. "
         "Kết quả phản ánh dữ liệu truy xuất được tại thời điểm xác minh.*",
     ])
     return "\n".join(lines)
 
 
 def _build_html_summary_for_pdf(res: VerificationResponse) -> str:
+    forensics_html = ""
+    if res.image_forensics is not None:
+        img = res.image_forensics
+        probs = img.origin_probabilities
+        tech = img.technical
+        reg_items = "".join(
+            f"<li><b>[{escape(r.region_id)}] {escape(r.label_vi)}</b> ({escape(r.severity)}): {escape(r.explanation_vi)}</li>"
+            for r in img.suspicious_regions
+        )
+        forensics_html = f"""
+        <div style="margin-bottom: 14pt; padding: 10pt; border-left: 4pt solid #4f46e5; background-color: #eef2ff;">
+            <p style="margin:0 0 4pt 0; font-size: 11pt;"><b>GIÁM ĐỊNH KỸ THUẬT SỐ HÌNH ẢNH &amp; KHUÔN MẶT</b></p>
+            <p style="margin:0 0 4pt 0;"><b>Kết luận:</b> {escape(img.authenticity_label_vi)} ({img.tamper_confidence_pct}% độ rõ ràng kỹ thuật)</p>
+            <p style="margin:0 0 4pt 0;"><b>Khuôn mặt:</b> {img.faces_detected} mặt | <b>Rủi ro ghép mặt / Deepfake:</b> {img.face_swap_risk_pct}%</p>
+            <p style="margin:0 0 4pt 0;"><b>Tỷ trọng nguồn gốc (%):</b> Ảnh gốc {probs.authentic_pct}% • Chỉnh sửa/Cắt ghép {probs.edited_spliced_pct}% • Ghép mặt/Deepfake {probs.face_swap_deepfake_pct}% • Tạo sinh AI {probs.ai_generated_pct}%</p>
+            <p style="margin:0 0 4pt 0;"><b>Thông số tệp &amp; ELA:</b> {escape(tech.format)} ({tech.width}x{tech.height}px, {tech.file_size_kb} KB) • EXIF: {'Có' if tech.has_exif else 'Không'} • Lệch vùng ELA: {int(tech.ela_regional_inconsistency * 100)}%</p>
+            <p style="margin:0 0 4pt 0;"><b>Phân tích khuôn mặt:</b> {escape(img.face_analysis_vi)}</p>
+            <p style="margin:0 0 4pt 0;"><b>Ánh sáng &amp; cắt ghép:</b> {escape(img.lighting_and_blend_vi)}</p>
+            {f'<ul>{reg_items}</ul>' if reg_items else ''}
+        </div>
+        """
+
     claim_blocks: list[str] = []
     for c in res.claims:
         color = VERDICT_HEX.get(c.verdict, "#374151")
@@ -124,10 +181,11 @@ def _build_html_summary_for_pdf(res: VerificationResponse) -> str:
 
     return f"""
     <div style="font-family: sans-serif; font-size: 9.5pt; line-height: 1.4; color: #0f172a;">
-        <h1 style="font-size: 15pt; color: #0f172a; margin-bottom: 4pt;">BÁO CÁO ĐÍNH KÈM – TRUECHECK AI</h1>
+        <h1 style="font-size: 15pt; color: #0f172a; margin-bottom: 4pt;">BÁO CÁO ĐÍNH KÈM – FACTCHECK ASSISTENT</h1>
         <p style="color: #475569; margin-bottom: 10pt;">
             Tài liệu: <b>{escape(res.source_title)}</b> | Thời điểm xác minh: {escape(res.verified_at)}
         </p>
+        {forensics_html}
         {''.join(claim_blocks)}
         <hr/>
         <p style="font-size: 8.5pt; color: #64748b;">
@@ -169,7 +227,7 @@ def generate_annotated_pdf(
                     annot = page.add_highlight_annot(quads)
                     annot.set_colors(stroke=rgb)
                     annot.set_info(
-                        title=f"TrueCheck AI [{claim.claim_id}]",
+                        title=f"FactCheck Assistent [{claim.claim_id}]",
                         content=f"{claim.verdict_label_vi}\n\n{claim.explanation}",
                     )
                     annot.update()
